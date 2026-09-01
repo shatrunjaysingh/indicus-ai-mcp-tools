@@ -57,6 +57,14 @@ Three things the wrapper handles, each learned by hitting it:
 Write the FastAPI app in `services/`, then add it to `SERVICES` in
 `mcp_server.py`. That is the whole procedure.
 
+## Onboarding these tools into IndicusAI
+
+What a tool is on that platform, the three ways one gets there, and how to
+build both demos' agents and pipelines in the UI:
+[demo-data-setup.md](https://github.com/shatrunjaysingh/IndicusAI/blob/main/demo-data-setup.md), in the platform
+repository — that side of it is all IndicusAI, and this repository only
+supplies the endpoints.
+
 ## Seeding a demo
 
 `seeds/` builds the workspace, skills, agents and pipeline in the platform.
