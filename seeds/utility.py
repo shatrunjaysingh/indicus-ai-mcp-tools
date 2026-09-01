@@ -266,6 +266,34 @@ def _body_only(markdown: str) -> str:
     return markdown.strip() if end == -1 else text[end + 4 :].strip()
 
 
+def _declared_tools(skill: str) -> list[str]:
+    """Every tool the manifest must declare for this skill to publish.
+
+    The platform rejects a bundle whose skill requests a tool the manifest does
+    not permit, and the manifest used to be built from the connector list alone.
+    A skill declaring anything else — `read`, or a tool from another service —
+    failed validation with a message about the manifest, when the mismatch was
+    the skill's own frontmatter.
+
+    Union rather than replacement: the connectors are what the agents are wired
+    to, and a skill that names none of them still runs beside those that do.
+    """
+    declared: list[str] = []
+    inside = False
+    for line in skill.splitlines():
+        if line.startswith("allowed-tools:"):
+            inside = True
+            continue
+        if inside:
+            if line.startswith("  - "):
+                declared.append(line[4:].strip())
+                continue
+            # Any other top-level key ends the list.
+            if line and not line.startswith(" "):
+                break
+    return sorted(set(TOOL_NAMES) | set(declared))
+
+
 async def main() -> None:
     async with httpx.AsyncClient(base_url=API, timeout=240) as c:
         login = await c.post("/auth/login", json={
@@ -368,7 +396,7 @@ async def main() -> None:
             published = await c.post("/plugins/publish", json={
                 "manifest": {"name": slug, "version": version,
                              "description": f"{slug} capability.",
-                             "permissions": {"tools": sorted(TOOL_NAMES)}},
+                             "permissions": {"tools": _declared_tools(text)}},
                 "skills": {slug: text},
                 "changelog": f"{slug} {version}",
                 "draft": False})

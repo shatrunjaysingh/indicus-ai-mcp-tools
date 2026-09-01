@@ -3,7 +3,9 @@ name: ioc-enrichment
 description: >
   Enrich the indicators from a triaged alert against threat intelligence, asset inventory and identity context, then state a verdict of malicious, suspicious or benign with the reasoning. Use after an alert has been triaged and its indicators identified.
 allowed-tools:
-  - read
+  - getIndicatorReputation
+  - getAsset
+  - getIdentity
 ---
 
 ## What this does

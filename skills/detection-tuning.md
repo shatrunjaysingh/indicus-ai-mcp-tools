@@ -2,8 +2,7 @@
 name: detection-tuning
 description: >
   Explain why a detection fired on legitimate activity and write the precise rule change that stops it recurring without creating a blind spot. Use when an alert has been enriched and judged benign.
-allowed-tools:
-  - read
+allowed-tools: []
 ---
 
 ## What this does

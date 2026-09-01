@@ -3,7 +3,7 @@ name: alert-triage
 description: >
   Read a security alert and establish what actually happened: which technique it represents, which host and account are involved, and which indicators need enriching before a verdict is possible. Use when an alert arrives from a SIEM, EDR or identity provider and needs a first assessment.
 allowed-tools:
-  - read
+  - getAlert
 ---
 
 ## What this does

@@ -3,7 +3,7 @@ name: incident-response
 description: >
   Produce a containment and response plan for a confirmed or suspected security incident: what to isolate, what to preserve, blast radius, and who to notify. Use when an alert has been enriched and judged malicious or suspicious.
 allowed-tools:
-  - read
+  - getAsset
 ---
 
 ## What this does
