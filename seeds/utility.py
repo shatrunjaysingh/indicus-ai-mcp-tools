@@ -39,7 +39,10 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-API = "http://127.0.0.1:8000/api/v1"
+# The platform, not the demo services. Overridable for the same reason
+# DEMO_HOST is: inside a container 127.0.0.1 is that container, so the
+# default is correct only when seeding from a laptop.
+API = os.environ.get("PLATFORM_API_URL", "http://127.0.0.1:8000/api/v1")
 # Overridable so the same script works on a laptop and in a deployment.
 # Inside a container 127.0.0.1 is that container, not the demo service, so a
 # deployment sets DEMO_HOST to the compose service name ("mcp-tools").

@@ -31,7 +31,10 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-API = "http://127.0.0.1:8000/api/v1"
+# The platform, not the demo services. Overridable for the same reason
+# DEMO_HOST is: inside a container 127.0.0.1 is that container, so the
+# default is correct only when seeding from a laptop.
+API = os.environ.get("PLATFORM_API_URL", "http://127.0.0.1:8000/api/v1")
 WORKSPACE_NAME = "IAM Access Review"
 PIPELINE_NAME = "IAM Access Review"
 PLUGIN_NAME = "iam-access-review"
@@ -59,7 +62,7 @@ IAM_API = os.environ.get("IAM_API_URL", f"http://{_DEMO_HOST}:8304/iam")
 # they need a service credential, and a key that can write to campaigns should
 # be created deliberately and scoped to one workspace, not swept up by a
 # bulk import.
-PLATFORM_API = "http://127.0.0.1:8000/api/v1"
+PLATFORM_API = API
 
 CAMPAIGN_TOOLS = [
     {

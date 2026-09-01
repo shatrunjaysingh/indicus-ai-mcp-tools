@@ -63,14 +63,28 @@ Write the FastAPI app in `services/`, then add it to `SERVICES` in
 They log in as `demo@example.com`, so `scripts/seed.py` in the platform repo
 runs first.
 
+**On a deployment**, run them inside the container — it already has the code
+and its dependencies, and the compose file sets both hostnames:
+
 ```bash
-DEMO_HOST=mcp-tools .venv/bin/python seeds/soc.py
-DEMO_HOST=mcp-tools .venv/bin/python seeds/utility.py
+docker compose exec mcp-tools python seeds/soc.py
+docker compose exec mcp-tools python seeds/utility.py
 ```
 
-`DEMO_HOST` is how the registered tool URLs and their `allowed_hosts` pin get
-the right hostname. Inside a container `127.0.0.1` is that container, so the
-default is only correct on a laptop.
+**On a laptop**, where the platform and these services are both on localhost:
+
+```bash
+.venv/bin/python seeds/soc.py
+.venv/bin/python seeds/utility.py
+```
+
+Two hostnames decide where a seed points, and both default to `127.0.0.1`,
+which is correct only on a laptop — inside a container it *is* the container:
+
+- `PLATFORM_API_URL` — the platform being seeded, `http://api:8000/api/v1`
+  over the compose network
+- `DEMO_HOST` — what goes into the registered tool URLs and their
+  `allowed_hosts` pin, `mcp-tools` over the compose network
 
 ## The recordings
 
