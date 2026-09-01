@@ -1,0 +1,29 @@
+# The demo tools, as one service serving REST and MCP.
+#
+#   docker compose up -d
+#
+# Joins the platform's network so the platform can reach it by name. The
+# platform's compose project is `indicusai` by default; override with
+# PLATFORM_NETWORK if yours differs.
+services:
+  mcp-tools:
+    build: .
+    container_name: mcp-tools
+    restart: unless-stopped
+    environment:
+      # Additional Host values this may be reached as, beyond mcp-tools and
+      # localhost. MCP's DNS-rebinding protection rejects anything unlisted.
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+    ports:
+      # Published so the tools can be exercised with curl from the box. The
+      # platform reaches them over the shared network, not through this.
+      - "127.0.0.1:8304:8304"
+    volumes:
+      # The visit recordings, which cannot be generated on Linux.
+      - ./data:/app/data:ro
+    networks: [platform]
+
+networks:
+  platform:
+    name: ${PLATFORM_NETWORK:-indicusai_default}
+    external: true

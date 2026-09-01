@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+
+# Generated fixtures. The visit recordings are built by
+# services/generate_visit_recordings.py, which uses macOS `say` and so cannot
+# run on Linux — they are copied to a deployment rather than built there.
+data/
+output/
+*.zip
+*.pdf
+*.log
