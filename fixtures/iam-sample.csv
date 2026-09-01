@@ -1,0 +1,56 @@
+record_type,id,name,type,owner,owner_status,privileged,interactive,in_vault,note
+account,ACC-00001,m.delacroix445,user,m.delacroix445,terminated,True,True,,
+account,ACC-00002,a.bell243,user,a.bell243,active,True,True,,
+account,ACC-00003,n.aziz370,user,n.aziz370,active,True,True,,
+account,ACC-00004,k.alvarez461,user,k.alvarez461,active,False,True,,
+account,ACC-00005,o.alvarez152,user,o.alvarez152,active,True,True,,
+account,ACC-00006,m.tanaka198,user,m.tanaka198,active,True,True,,
+account,ACC-00007,a.wu058,user,a.wu058,terminated,True,True,,
+account,ACC-00008,svc_jira_eng_0007,shared,d.raman416,active,True,True,False,
+account,ACC-00009,svc_tableau_0008,service,o.haddad434,active,True,False,True,
+account,ACC-00010,svc_vpn_gateway_0009,service,p.haddad610,active,True,False,True,
+account,ACC-00011,svc_snowflake_0010,service,p.duarte340,active,True,False,True,
+account,ACC-00012,j.moreau460,user,j.moreau460,active,True,True,,
+account,ACC-00013,svc_servicenow_0012,system,h.bell148,active,True,False,True,
+account,ACC-00014,svc_snowflake_0013,service,f.petrova403,active,True,False,True,
+account,ACC-00015,svc_aws_nonprod_0014,service,,UNRESOLVED,True,False,True,orphan
+account,ACC-00016,svc_okta_admin_0015,service,y.raman639,active,False,False,True,
+account,ACC-00017,svc_vault_secrets_0016,shared,o.bell578,active,True,True,True,
+account,ACC-00018,h.wu394,user,h.wu394,active,True,True,,
+account,ACC-00019,j.moreau514,user,j.moreau514,terminated,False,True,,
+account,ACC-00020,e.aziz377,user,e.aziz377,active,False,True,,
+account,ACC-00021,svc_concur_expense_0020,service,c.berg633,active,True,False,True,
+account,ACC-00022,i.costa284,user,i.costa284,active,True,True,,
+account,ACC-00023,m.novak486,user,m.novak486,active,True,True,,
+account,ACC-00024,n.devries305,user,n.devries305,active,False,True,,
+account,ACC-00025,m.tanaka161,user,m.tanaka161,active,True,True,,
+account,ACC-00026,s.bell159,user,s.bell159,active,False,True,,
+account,ACC-00027,svc_netsuite_0026,service,a.raman464,active,False,False,True,
+account,ACC-00028,svc_sap_fin_0027,shared,i.costa284,active,True,True,False,
+account,ACC-00029,k.delacroix384,user,k.delacroix384,active,True,True,,
+account,ACC-00030,a.weiss022,user,a.weiss022,active,False,True,,
+account,ACC-00031,c.wu143,user,c.wu143,active,False,True,,
+account,ACC-00032,l.okafor474,user,l.okafor474,active,False,True,,
+account,ACC-00033,i.okafor075,user,i.okafor075,active,True,True,,
+account,ACC-00034,svc_oracle_db_0033,service,r.sato440,active,True,False,True,
+account,ACC-00035,k.delacroix252,user,k.delacroix252,active,False,True,,
+account,ACC-00036,a.griffiths173,user,a.griffiths173,active,False,True,,
+account,ACC-00037,j.sato106,user,j.sato106,active,False,True,,
+account,ACC-00038,h.novak117,user,h.novak117,active,True,True,,
+account,ACC-00039,t.lindqvist407,user,t.lindqvist407,active,True,True,,
+account,ACC-00040,n.okafor338,user,n.okafor338,active,False,True,,
+reinstated,ACC-00365,n.moreau259,FileShare-Corp-Write,d.griffiths399,,,,,"revoked 2026-07-20, back 2026-08-07, ticket=REQ55237"
+reinstated,ACC-00603,svc_github_ent_0602,VPN-Gateway-Export,n.moreau337,,,,,"revoked 2026-07-05, back 2026-08-10, ticket=NONE"
+reinstated,ACC-01040,e.griffiths313,VPN-Gateway-Admin,c.costa197,,,,,"revoked 2026-07-01, back 2026-08-05, ticket=NONE"
+reinstated,ACC-00420,m.griffiths536,ServiceNow-Approve,k.weiss387,,,,,"revoked 2026-06-26, back 2026-08-05, ticket=NONE"
+reinstated,ACC-00418,svc_slack_ent_0417,Vault-Secrets-Read,v.lindqvist032,,,,,"revoked 2026-07-20, back 2026-08-13, ticket=REQ85520"
+reinstated,ACC-01136,r.wu379,AWS-Prod-Read,a.alvarez618,,,,,"revoked 2026-07-03, back 2026-07-31, ticket=NONE"
+reinstated,ACC-00979,svc_netsuite_0978,PowerBI-Admin,t.delacroix007,,,,,"revoked 2026-07-07, back 2026-08-04, ticket=NONE"
+reinstated,ACC-00739,r.weiss333,Zendesk-Approve,k.novak002,,,,,"revoked 2026-06-22, back 2026-08-01, ticket=NONE"
+reinstated,ACC-00799,p.weiss264,Workday-HR-Write,s.sato319,,,,,"revoked 2026-06-28, back 2026-08-04, ticket=NONE"
+reinstated,ACC-00327,svc_concur_expense_0326,Okta-Admin-Export,y.sato532,,,,,"revoked 2026-07-06, back 2026-08-02, ticket=NONE"
+reinstated,ACC-00191,h.devries490,Marketo-Write,l.bell090,,,,,"revoked 2026-07-06, back 2026-08-01, ticket=NONE"
+reinstated,ACC-00050,a.delacroix371,Concur-Expense-Admin,n.lindqvist479,,,,,"revoked 2026-07-12, back 2026-08-11, ticket=NONE"
+reinstated,ACC-00460,l.sato590,Okta-Admin-Admin,a.duarte209,,,,,"revoked 2026-07-06, back 2026-08-05, ticket=REQ45350"
+reinstated,ACC-00571,svc_powerbi_0570,Zendesk-Write,j.raman061,,,,,"revoked 2026-06-22, back 2026-08-04, ticket=NONE"
+reinstated,ACC-00179,svc_docusign_0178,VPN-Gateway-Export,r.tanaka235,,,,,"revoked 2026-07-14, back 2026-08-02, ticket=NONE"

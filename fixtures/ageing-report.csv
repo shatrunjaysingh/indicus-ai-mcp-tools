@@ -1,0 +1,65 @@
+claim_id,patient,payer,date_of_service,cdt_code,procedure,billed,balance,age_days,status,carc,rarc,denial_reason
+CLM-89000,Patient 000,Guardian,2026-05-15,D4341,"Scaling and root planing, per quadrant",486.00,38.88,95,denied,16,N706,Missing supporting documentation
+CLM-89001,Patient 001,Guardian,2026-07-11,D4341,"Scaling and root planing, per quadrant",486.00,38.88,38,denied,16,N706,Missing supporting documentation
+CLM-89002,Patient 002,Northbridge Dental,2026-05-15,D4341,"Scaling and root planing, per quadrant",486.00,97.20,95,denied,16,N706,Missing supporting documentation
+CLM-89003,Patient 003,Guardian,2026-01-20,D4341,"Scaling and root planing, per quadrant",486.00,486.00,210,denied,16,N706,Missing supporting documentation
+CLM-89004,Patient 004,Guardian,2026-02-24,D4341,"Scaling and root planing, per quadrant",486.00,486.00,175,denied,16,N706,Missing supporting documentation
+CLM-89005,Patient 005,Meridian Dental PPO,2026-07-24,D4341,"Scaling and root planing, per quadrant",486.00,486.00,25,denied,16,N706,Missing supporting documentation
+CLM-89006,Patient 006,Delta Dental,2026-03-31,D4341,"Scaling and root planing, per quadrant",486.00,486.00,140,denied,16,N706,Missing supporting documentation
+CLM-89007,Patient 007,Guardian,2026-03-31,D4341,"Scaling and root planing, per quadrant",486.00,486.00,140,denied,16,N706,Missing supporting documentation
+CLM-89008,Patient 008,Meridian Dental PPO,2026-06-16,D4341,"Scaling and root planing, per quadrant",486.00,38.88,63,denied,16,N706,Missing supporting documentation
+CLM-89009,Patient 009,Delta Dental,2026-02-24,D4341,"Scaling and root planing, per quadrant",486.00,97.20,175,denied,16,N706,Missing supporting documentation
+CLM-89010,Patient 010,Cigna Dental,2026-01-20,D4341,"Scaling and root planing, per quadrant",486.00,97.20,210,denied,16,N706,Missing supporting documentation
+CLM-89011,Patient 011,Meridian Dental PPO,2026-06-16,D4341,"Scaling and root planing, per quadrant",486.00,486.00,63,denied,16,N706,Missing supporting documentation
+CLM-89012,Patient 012,Cigna Dental,2026-05-22,D4341,"Scaling and root planing, per quadrant",486.00,486.00,88,denied,16,N706,Missing supporting documentation
+CLM-89013,Patient 013,Northbridge Dental,2026-08-06,D4341,"Scaling and root planing, per quadrant",486.00,486.00,12,denied,16,N706,Missing supporting documentation
+CLM-89014,Patient 014,Delta Dental,2026-05-15,D4341,"Scaling and root planing, per quadrant",486.00,38.88,95,denied,16,N706,Missing supporting documentation
+CLM-89015,Patient 015,Cigna Dental,2026-03-31,D4341,"Scaling and root planing, per quadrant",486.00,486.00,140,denied,16,N706,Missing supporting documentation
+CLM-89016,Patient 016,Meridian Dental PPO,2026-06-16,D4341,"Scaling and root planing, per quadrant",486.00,97.20,63,denied,16,N706,Missing supporting documentation
+CLM-89017,Patient 017,Meridian Dental PPO,2026-07-11,D4341,"Scaling and root planing, per quadrant",486.00,486.00,38,denied,16,N706,Missing supporting documentation
+CLM-89018,Patient 018,Guardian,2026-01-15,D4341,"Scaling and root planing, per quadrant",486.00,486.00,215,denied,29,,Timely filing expired
+CLM-89019,Patient 019,Delta Dental,2026-02-09,D2740,Crown - porcelain/ceramic,1240.00,1240.00,190,denied,29,,Timely filing expired
+CLM-89020,Patient 020,Meridian Dental PPO,2026-01-15,D0274,Bitewings - four films,92.00,92.00,215,denied,29,,Timely filing expired
+CLM-89021,Patient 021,Northbridge Dental,2026-02-09,D1110,Prophylaxis - adult,210.00,210.00,190,denied,29,,Timely filing expired
+CLM-89022,Patient 022,Meridian Dental PPO,2025-12-21,D0274,Bitewings - four films,92.00,92.00,240,denied,29,,Timely filing expired
+CLM-89023,Patient 023,Guardian,2026-01-15,D2740,Crown - porcelain/ceramic,1240.00,1240.00,215,denied,29,,Timely filing expired
+CLM-89024,Patient 024,Meridian Dental PPO,2026-02-09,D1110,Prophylaxis - adult,210.00,210.00,190,denied,29,,Timely filing expired
+CLM-89025,Patient 025,Guardian,2026-02-09,D2740,Crown - porcelain/ceramic,1240.00,1240.00,190,denied,29,,Timely filing expired
+CLM-89026,Patient 026,Northbridge Dental,2026-03-31,D1110,Prophylaxis - adult,210.00,16.80,140,denied,16,N706,Missing supporting documentation
+CLM-89027,Patient 027,Delta Dental,2026-03-31,D2391,"Resin composite - one surface, posterior",245.00,245.00,140,denied,119,N362,Frequency limit reached
+CLM-89028,Patient 028,Northbridge Dental,2026-07-11,D2740,Crown - porcelain/ceramic,1240.00,248.00,38,denied,22,,Other coverage is primary
+CLM-89029,Patient 029,Guardian,2026-02-09,D2391,"Resin composite - one surface, posterior",245.00,245.00,190,denied,29,,Timely filing expired
+CLM-89030,Patient 030,Guardian,2026-05-22,D2740,Crown - porcelain/ceramic,1240.00,99.20,88,denied,22,,Other coverage is primary
+CLM-89031,Patient 031,Meridian Dental PPO,2026-08-06,D4341,"Scaling and root planing, per quadrant",486.00,486.00,12,denied,119,N362,Frequency limit reached
+CLM-89032,Patient 032,Delta Dental,2026-06-16,D4341,"Scaling and root planing, per quadrant",486.00,486.00,63,denied,45,,Exceeds fee schedule
+CLM-89033,Patient 033,Cigna Dental,2026-03-31,D1110,Prophylaxis - adult,210.00,16.80,140,denied,119,N362,Frequency limit reached
+CLM-89034,Patient 034,Northbridge Dental,2026-02-09,D2391,"Resin composite - one surface, posterior",245.00,245.00,190,denied,29,,Timely filing expired
+CLM-89035,Patient 035,Cigna Dental,2026-02-24,D0274,Bitewings - four films,92.00,92.00,175,denied,45,,Exceeds fee schedule
+CLM-89036,Patient 036,Cigna Dental,2026-02-09,D2740,Crown - porcelain/ceramic,1240.00,1240.00,190,denied,29,,Timely filing expired
+CLM-89037,Patient 037,Meridian Dental PPO,2026-07-02,D0274,Bitewings - four films,92.00,92.00,47,denied,119,N362,Frequency limit reached
+CLM-89038,Patient 038,Meridian Dental PPO,2026-06-08,D2740,Crown - porcelain/ceramic,1240.00,1240.00,71,denied,16,N706,Missing supporting documentation
+CLM-89039,Patient 039,Guardian,2026-01-15,D1110,Prophylaxis - adult,210.00,210.00,215,denied,29,,Timely filing expired
+CLM-89040,Patient 040,Cigna Dental,2026-05-15,D4341,"Scaling and root planing, per quadrant",486.00,97.20,95,denied,197,N702,Prior auth absent
+CLM-89041,Patient 041,Delta Dental,2026-03-31,D4341,"Scaling and root planing, per quadrant",486.00,486.00,140,denied,197,N702,Prior auth absent
+CLM-89042,Patient 042,Northbridge Dental,2026-06-16,D4341,"Scaling and root planing, per quadrant",486.00,97.20,63,denied,22,,Other coverage is primary
+CLM-89043,Patient 043,Meridian Dental PPO,2026-05-15,D4341,"Scaling and root planing, per quadrant",486.00,97.20,95,denied,197,N702,Prior auth absent
+CLM-89044,Patient 044,Delta Dental,2026-06-08,D2740,Crown - porcelain/ceramic,1240.00,1240.00,71,denied,16,N706,Missing supporting documentation
+CLM-89045,Patient 045,Guardian,2026-08-06,D4341,"Scaling and root planing, per quadrant",486.00,38.88,12,denied,119,N362,Frequency limit reached
+CLM-89046,Patient 046,Delta Dental,2026-02-24,D4341,"Scaling and root planing, per quadrant",486.00,38.88,175,denied,45,,Exceeds fee schedule
+CLM-89047,Patient 047,Meridian Dental PPO,2026-03-31,D2391,"Resin composite - one surface, posterior",245.00,245.00,140,denied,197,N702,Prior auth absent
+CLM-89048,Patient 048,Delta Dental,2026-07-24,D4341,"Scaling and root planing, per quadrant",486.00,97.20,25,denied,22,,Other coverage is primary
+CLM-89049,Patient 049,Delta Dental,2026-01-20,D1110,Prophylaxis - adult,210.00,16.80,210,denied,119,N362,Frequency limit reached
+CLM-89050,Patient 050,Cigna Dental,2026-07-24,D0274,Bitewings - four films,92.00,92.00,25,denied,45,,Exceeds fee schedule
+CLM-89051,Patient 051,Northbridge Dental,2026-05-15,D2391,"Resin composite - one surface, posterior",245.00,245.00,95,denied,197,N702,Prior auth absent
+CLM-89052,Patient 052,Cigna Dental,2026-03-31,D4341,"Scaling and root planing, per quadrant",486.00,38.88,140,denied,119,N362,Frequency limit reached
+CLM-89053,Patient 053,Guardian,2026-06-16,D4341,"Scaling and root planing, per quadrant",486.00,486.00,63,denied,16,N706,Missing supporting documentation
+CLM-89054,Patient 054,Delta Dental,2026-07-11,D2740,Crown - porcelain/ceramic,1240.00,248.00,38,denied,45,,Exceeds fee schedule
+CLM-89055,Patient 055,Northbridge Dental,2026-01-15,D0274,Bitewings - four films,92.00,18.40,215,denied,29,,Timely filing expired
+CLM-89056,Patient 056,Guardian,2026-01-15,D0274,Bitewings - four films,92.00,92.00,215,denied,29,,Timely filing expired
+CLM-89057,Patient 057,Cigna Dental,2026-02-09,D1110,Prophylaxis - adult,210.00,16.80,190,denied,29,,Timely filing expired
+CLM-89058,Patient 058,Northbridge Dental,2026-07-24,D4341,"Scaling and root planing, per quadrant",486.00,97.20,25,denied,22,,Other coverage is primary
+CLM-89059,Patient 059,Northbridge Dental,2026-05-15,D4341,"Scaling and root planing, per quadrant",486.00,97.20,95,denied,119,N362,Frequency limit reached
+CLM-89060,Patient 060,Cigna Dental,2026-02-24,D0274,Bitewings - four films,92.00,7.36,175,denied,119,N362,Frequency limit reached
+CLM-89061,Patient 061,Meridian Dental PPO,2026-06-08,D2391,"Resin composite - one surface, posterior",245.00,245.00,71,denied,119,N362,Frequency limit reached
+CLM-89062,Patient 062,Guardian,2026-08-06,D1110,Prophylaxis - adult,210.00,42.00,12,denied,45,,Exceeds fee schedule
+CLM-89063,Patient 063,Northbridge Dental,2026-02-24,D1110,Prophylaxis - adult,210.00,210.00,175,denied,16,N706,Missing supporting documentation
