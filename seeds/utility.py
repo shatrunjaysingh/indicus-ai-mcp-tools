@@ -410,7 +410,21 @@ async def main() -> None:
         models = (await c.get(f"/workspaces/{workspace}/models")).json()["models"]
         available = [m["id"] for m in models if m["available"]]
         if not available:
-            print("\n   no usable model in this workspace")
+            # The endpoint says per model whether the workspace lacks a grant or
+            # lacks a provider key — two different fixes in two different places.
+            # Printing only "no usable model" sent people to the wrong one.
+            print("\n   No usable model in this workspace. Why, per model:")
+            for m in models[:6]:
+                reason = m.get("unavailable_reason") or "unavailable"
+                print(f"     {m['id']:<28} {reason}")
+            print(
+                "\n   A model needs BOTH a grant and a provider key, and the key\n"
+                "   is per workspace — it is not inherited from another one.\n"
+                "   Sign in as the owner, switch to this workspace, then:\n"
+                "     Administration -> Anthropic   (paste the key)\n"
+                "     Administration -> Models      (grant, if the reason says so)\n"
+                "   Then re-run this seed; it reuses everything above."
+            )
             return
         fast = "claude-haiku-4-5" if "claude-haiku-4-5" in available else available[0]
         deep = "claude-sonnet-5" if "claude-sonnet-5" in available else available[0]
