@@ -54,11 +54,26 @@ answering one of them with another's output.
 | Asked for | Do this |
 |---|---|
 | **Payment probability for every consumer** | `getCollectionPortfolio` for the scored population and the segment distribution; `getConsumerScore` to show what a single score is made of. **Do not produce probabilities yourself** — say the model scored the whole book, give the distribution, and demonstrate on one account. |
-| **High-risk defaulters, before they become chronic** | `listEarlyWarning`. Rank on **chronic risk**, not payment probability — they answer different questions, and an account can be paying today and still be tipping. Say what makes each one catchable now. |
+| **High-risk defaulters, before they become chronic** | `listEarlyWarning`. Rank on **chronic risk**, not payment probability — they answer different questions, and an account can be paying today and still be tipping. **Then produce the list**: show the ranked accounts, and size an intervention with `buildCampaignList(min_chronic_risk=…)`. |
 | **The best recovery action** | The ladder is SMS → call → field visit → notice → disconnection. Match the channel to the segment's historical response, not to the size of the debt. Disconnection is gated on eligibility, never on value. |
 | **Expected collection next month** | `getCollectionForecast`. Give the figure, then the shape of the recent error. |
 | **Segment consumers by payment behaviour** | `getCollectionPortfolio`. Give each segment's definition, size, money and mean probability — and say what each one implies for treatment, or it is a table rather than an answer. |
 | **Optimise collection campaigns** | `getCampaignHistory` first, then `buildCampaignList`. What has already been tried and what it returned is the starting point, not an afterthought. |
+
+### Identification without a list is not an answer
+
+Asked to identify anything — high-risk defaulters, a segment, a target — the
+answer is a **list somebody can work**, not a count and a description of it. A
+collection manager cannot act on "55,525 accounts are at risk".
+
+So: give the population and what it holds, **show the ranked accounts**, and
+size the intervention against a channel capacity. `listEarlyWarning` returns
+the rows and takes a `limit`; `buildCampaignList` with `min_chronic_risk` turns
+the same population into a costed campaign with its expected recovery.
+
+Name the accounts you show. A table of consumer numbers with the risk, the
+balance and what drives each one is the deliverable; the surrounding analysis
+explains it.
 
 ### Disconnection is not a ranking
 

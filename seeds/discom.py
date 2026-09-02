@@ -176,11 +176,13 @@ TOOLS = [
          "expected recovery, the cost and a sample of the list. This is the "
          "working list a field team receives.",
          "/portfolio/campaign", None,
-         {"channel": "field_visit | call | sms | notice",
+         {"channel": "field_visit | call | sms | notice | disconnection",
           "capacity": "accounts to select; defaults to the channel's monthly capacity",
           "exclude_disputed": "true | false, default true",
           "exclude_vacated": "true | false, default true",
           "min_outstanding": "rupees, inclusive",
+          "min_chronic_risk": "0-1; use to build a campaign against the "
+                              "early-warning population",
           "division": "e.g. Pune East"}),
     _get("listEarlyWarning",
          "Accounts most likely to become chronic defaulters, ranked on chronic "

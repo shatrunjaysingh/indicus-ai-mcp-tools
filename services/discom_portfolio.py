@@ -284,7 +284,7 @@ def _disconnection_eligibility(a: Account) -> tuple[bool, str]:
     return True, ""
 
 
-def _generate() -> tuple[list[Account], dict, dict]:
+def _generate() -> tuple[list[Account], list[Account], dict, dict]:
     """Stream the book once: accumulate aggregates, keep the top accounts.
 
     A heap rather than a sort, because sorting a million rows to take six
@@ -295,6 +295,12 @@ def _generate() -> tuple[list[Account], dict, dict]:
     weights = [_MIX[c]["share"] for c in cats]
 
     heap: list[tuple[float, int, Account]] = []
+    # A second heap on chronic risk. The value heap cannot serve the
+    # early-warning question: the accounts closest to tipping are not the
+    # largest balances, so filtering a value-ranked pool by risk returns the
+    # big accounts that happen to be at risk and misses the rest — which is
+    # the balance-driven error this whole skill exists to avoid.
+    risk_heap: list[tuple[float, int, Account]] = []
     agg: dict[str, dict] = {
         name: {"accounts": 0, "outstanding": 0.0, "expected": 0.0,
                "p_sum": 0.0, "at_risk": 0, "at_risk_outstanding": 0.0,
@@ -360,11 +366,18 @@ def _generate() -> tuple[list[Account], dict, dict]:
         elif acc.expected_recovery > heap[0][0]:
             heapq.heapreplace(heap, (acc.expected_recovery, i, acc))
 
+        if acc.chronic_risk > 0:
+            if len(risk_heap) < MATERIALISE:
+                heapq.heappush(risk_heap, (acc.chronic_risk, i, acc))
+            elif acc.chronic_risk > risk_heap[0][0]:
+                heapq.heapreplace(risk_heap, (acc.chronic_risk, i, acc))
+
     top = [a for _e, _i, a in sorted(heap, key=lambda t: -t[0])]
-    return top, agg, by_division
+    at_risk = [a for _r, _i, a in sorted(risk_heap, key=lambda t: -t[0])]
+    return top, at_risk, agg, by_division
 
 
-def _load() -> tuple[list[Account], dict, dict]:
+def _load() -> tuple[list[Account], list[Account], dict, dict]:
     """Generate once, then load from cache.
 
     Streaming ten lakh accounts takes about twenty seconds. Paying that on
@@ -377,32 +390,35 @@ def _load() -> tuple[list[Account], dict, dict]:
     # threshold was left out once and the cache went on serving counts
     # computed at the old value — the tool reported the new threshold
     # beside the old number, which is worse than either alone.
-    key = f"{SEED}-{POPULATION}-{MATERIALISE}-{AT_RISK_THRESHOLD}"
+    key = f"{SEED}-{POPULATION}-{MATERIALISE}-{AT_RISK_THRESHOLD}-v2"
     cache = Path(__file__).resolve().parent / "_portfolio_cache.json"
     if cache.exists():
         try:
             blob = json.loads(cache.read_text())
             if blob.get("key") == key:
                 top = [Account(**a) for a in blob["top"]]
-                return top, blob["segments"], blob["divisions"]
+                at_risk = [Account(**a) for a in blob["at_risk"]]
+                return top, at_risk, blob["segments"], blob["divisions"]
         except (json.JSONDecodeError, TypeError, KeyError):
             pass  # regenerate rather than fail on a cache written by older code
 
-    top, segments, divisions = _generate()
+    top, at_risk, segments, divisions = _generate()
     try:
         cache.write_text(json.dumps({
             "key": key,
             "top": [asdict(a) for a in top],
+            "at_risk": [asdict(a) for a in at_risk],
             "segments": segments, "divisions": divisions,
         }))
     except OSError:
         # A read-only image is fine; it just pays the generation each start.
         pass
-    return top, segments, divisions
+    return top, at_risk, segments, divisions
 
 
-TOP, SEGMENT_TOTALS, DIVISION_TOTALS = _load()
-BY_NO: dict[str, Account] = {a.consumer_no: a for a in TOP}
+TOP, AT_RISK, SEGMENT_TOTALS, DIVISION_TOTALS = _load()
+# Lookup spans both pools, so a consumer surfaced by either list can be scored.
+BY_NO: dict[str, Account] = {a.consumer_no: a for a in (*TOP, *AT_RISK)}
 
 
 # --- what has already been tried -------------------------------------------

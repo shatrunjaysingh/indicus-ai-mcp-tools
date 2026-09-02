@@ -504,6 +504,7 @@ def build_campaign(channel: str = "field_visit", capacity: int = 0,
                    exclude_disputed: bool = True,
                    exclude_vacated: bool = True,
                    min_outstanding: float = 0,
+                   min_chronic_risk: float = 0,
                    division: str | None = None) -> dict:
     """The working list: the highest expected-recovery accounts a channel can
     reach, with what the selection is worth.
@@ -536,13 +537,18 @@ def build_campaign(channel: str = "field_visit", capacity: int = 0,
     if exclude_vacated:
         excluded["gone_away"] = portfolio.SEGMENT_TOTALS["gone_away"]["accounts"]
 
+    source = portfolio.AT_RISK if min_chronic_risk > 0 else portfolio.TOP
     pool = [
-        a for a in portfolio.TOP
+        a for a in source
         if a.outstanding >= min_outstanding
         # Disconnection is the one channel with a legal precondition. A
         # high-value account with no served notice is not a target, however far
         # up the ranking it sits.
         and (channel != "disconnection" or a.dc_eligible)
+        # So an early-warning population can be turned straight into a
+        # campaign. Identifying who is about to become chronic is only worth
+        # anything if it produces a list somebody works.
+        and a.chronic_risk >= min_chronic_risk
         and (division is None or a.division == division)
         and not (exclude_disputed and a.segment == "disputed")
         and not (exclude_vacated and a.segment == "gone_away")
@@ -555,7 +561,7 @@ def build_campaign(channel: str = "field_visit", capacity: int = 0,
     from collections import Counter
     mix = Counter(a.segment for a in selected)
     blocked = Counter(
-        a.dc_blocked_by for a in portfolio.TOP
+        a.dc_blocked_by for a in source
         if channel == "disconnection" and not a.dc_eligible)
 
     return {
@@ -566,6 +572,7 @@ def build_campaign(channel: str = "field_visit", capacity: int = 0,
         "selection_criteria": {
             "ranked_by": "expected_recovery = outstanding x payment_probability",
             "min_outstanding": min_outstanding,
+            "min_chronic_risk": min_chronic_risk,
             "division": division or "all",
             "excluded_segments": excluded or "none",
         },
@@ -684,7 +691,7 @@ def list_early_warning(limit: int = 20, min_risk: float = 0.5,
     Accounts already chronic score zero. The point is who can still be caught.
     """
     rows = [
-        a for a in portfolio.TOP
+        a for a in portfolio.AT_RISK
         if a.chronic_risk >= min_risk
         and (division is None or a.division == division)
     ]
@@ -696,9 +703,12 @@ def list_early_warning(limit: int = 20, min_risk: float = 0.5,
             sum(v["at_risk_outstanding"] for v in totals.values()), 2),
         "at_risk_threshold": portfolio.AT_RISK_THRESHOLD,
         "matched_in_working_list": len(rows),
-        "note": ("population_at_risk counts the whole book above the threshold; "
-                 "the rows below are drawn from the materialised working list "
-                 "of highest-value accounts."),
+        "note": ("population_at_risk counts the whole book above the threshold. "
+                 "The rows below are the highest-risk accounts from the "
+                 "materialised working list, ranked. Raise `limit` for a longer "
+                 "list, or call buildCampaignList with min_chronic_risk to size "
+                 "an intervention against this population and get the full "
+                 "selection with its cost and expected recovery."),
         "accounts": [
             {"consumer_no": a.consumer_no, "division": a.division,
              "segment": a.segment, "outstanding": a.outstanding,
