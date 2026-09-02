@@ -149,6 +149,40 @@ TOOLS = [
          "/divisions/{division}", {"division": "e.g. Pune Rural"}),
     _get("listDivisions", "Every division with denominators included.",
          "/divisions"),
+    _get("getCollectionPortfolio",
+         "The outstanding book segmented by payment behaviour, with expected "
+         "recovery, mean probability and historical response by channel for "
+         "each segment.",
+         "/portfolio", None, {"division": "e.g. Pune East; omit for all"}),
+    _get("listCollectionTargets",
+         "Accounts ranked by expected recovery (outstanding x probability), "
+         "filterable by segment, division, balance and probability. Returns "
+         "the matched count and total separately from the rows shown.",
+         "/portfolio/accounts", None,
+         {"segment": "e.g. recent_deterioration",
+          "division": "e.g. Pune East",
+          "min_outstanding": "rupees, inclusive",
+          "min_probability": "0-1, inclusive",
+          "limit": "rows to return, max 100"}),
+    _get("getConsumerScore",
+         "One account's payment probability with the contribution of each "
+         "feature behind it, so the score can be explained rather than "
+         "asserted.",
+         "/portfolio/consumers/{consumer_no}/score",
+         {"consumer_no": "e.g. DL-700123"}),
+    _get("getRecoveryChannels",
+         "Cost per account and monthly capacity of each recovery channel. "
+         "Field capacity is the binding constraint on any campaign.",
+         "/portfolio/channels"),
+    _get("getCampaignHistory",
+         "Past collection campaigns with the segments they hit, cost, "
+         "recovery and return per rupee spent.",
+         "/portfolio/campaigns"),
+    _get("getCollectionForecast",
+         "Expected collection for the coming month at current effort, with "
+         "the last six forecasts against actuals.",
+         "/portfolio/forecast", None,
+         {"division": "e.g. Pune East; omit for all"}),
 ]
 
 TOOL_NAMES = {t["name"] for t in TOOLS}
@@ -157,9 +191,26 @@ TOOL_NAMES = {t["name"] for t in TOOLS}
 AGENTS = [
     (
         "payment", "Revenue & Collection AI", "deep", "revenue-collection-ai",
-        ["getConsumer", "getBillingHistory", "getPaymentHistory",
+        ["getCollectionPortfolio", "listCollectionTargets", "getConsumerScore",
+         "getRecoveryChannels", "getCampaignHistory", "getCollectionForecast",
+         "getConsumer", "getBillingHistory", "getPaymentHistory",
          "getConsumptionHistory", "getNoticeHistory", "getDisconnectionRecord"],
-        "You decide what collection action one outstanding account receives.\n\n"
+        "You decide where a DISCOM spends its collection effort.\n\n"
+        "A consumer number means assess that one account. Anything else — a "
+        "segment, a division, a campaign, a forecast — means work the book, "
+        "starting with getCollectionPortfolio.\n\n"
+        "Rank on expected recovery, which is outstanding multiplied by payment "
+        "probability, never on the balance alone. The segment holding the most "
+        "money returns the least of it in almost every book, and a campaign "
+        "built on the balance column sends field teams to people who were "
+        "never going to pay.\n\n"
+        "Check getRecoveryChannels before proposing anything: field capacity "
+        "is finite and a plan that exceeds it is not a plan. Say what the "
+        "capacity would otherwise have done. Read getCampaignHistory before "
+        "recommending a campaign that resembles one already run.\n\n"
+        "Exclude disputed balances and vacated premises before ranking, and "
+        "give their counts — excluding them is a recommendation, not an "
+        "omission.\n\n"
         "Read the payment behaviour before the balance. A large arrear on a "
         "consumer who has paid 19 of 24 cycles is a different problem from a "
         "small one on a consumer who has never paid without a notice, and the "
@@ -407,6 +458,7 @@ async def main() -> None:
         rows = (await c.get("/custom-tools")).json()
         rows = rows if isinstance(rows, list) else rows.get("tools", [])
         tools = {t["name"]: t["id"] for t in rows if t["name"] in TOOL_NAMES}
+        live_tool_ids = set(tools.values())
         print(f"   {len(tools)} of {len(TOOL_NAMES)} tools registered")
 
         # --- 2. skills ---
@@ -487,8 +539,22 @@ async def main() -> None:
                 print(f"   {name}: tools not registered: {', '.join(missing)}")
                 continue
             if name in registry:
-                await c.patch(f"/agents/{registry[name]}", json={"config": config})
-                action = "updated"
+                # Agent versions are immutable, so there is no PATCH: an edit
+                # is a new version plus a deploy. The seed used to call
+                # PATCH /agents/{id} and ignore the response — the endpoint
+                # does not exist, so every re-run printed "updated" while
+                # changing nothing, and the agents kept tool ids that the
+                # re-import below had already deleted.
+                agent_id = registry[name]
+                made = await c.post(f"/agents/{agent_id}/versions", json=config)
+                if made.status_code != 201:
+                    print(f"   {name} version failed:", made.text[:200])
+                    continue
+                deployed = await c.post(f"/agents/{agent_id}/deploy", json={})
+                if deployed.status_code not in (200, 201):
+                    print(f"   {name} deploy failed:", deployed.text[:200])
+                    continue
+                action = f"updated to v{made.json()['version']}"
             else:
                 created = await c.post("/agents", json={
                     "name": name,
@@ -498,15 +564,23 @@ async def main() -> None:
                     print(f"   {name} failed:", created.text[:200])
                     continue
                 action = "created"
-            print(f"   {name:<26} {action}  "
-                  f"{len(config['custom_tool_ids'])} tools, 1 skill")
+
+            # Read back rather than trusting what was sent. Everything above
+            # can report success and leave an agent pointing at tools that no
+            # longer exist, which is exactly what happened.
+            check = (await c.get(f"/agents/{agent_id if name in registry else created.json()['id']}")).json()
+            stored = check.get("config", {}).get("custom_tool_ids", [])
+            live = [t for t in stored if t in live_tool_ids]
+            flag = "" if len(live) == len(config["custom_tool_ids"]) else "  <-- MISMATCH"
+            print(f"   {name:<30} {action:<16} {len(live)} tools, "
+                  f"{len(check.get('skill_bindings', []))} skill{flag}")
 
         print(f"\nDone. Workspace: {WORKSPACE_NAME}")
         print("\nTry each agent in chat:")
         # Built from AGENTS rather than written out, so a renamed agent cannot
         # leave this list pointing at a name that no longer exists.
         cases = {
-            "payment": "DL-4471002",
+            "payment": "'Plan next month's field campaign'  |  DL-4471002",
             "recovery": "CM-8890145   then DL-2245108",
             "theft": "CM-5561093   then IN-7734021",
             "survey": "CM-8890145",

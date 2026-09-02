@@ -14,6 +14,7 @@ deploy.
 from __future__ import annotations
 
 import discom_data as data
+import discom_portfolio as portfolio
 from fastapi import FastAPI, HTTPException
 
 app = FastAPI(
@@ -440,3 +441,199 @@ def list_divisions() -> dict:
     on rates alone."""
     return {"count": len(data.DIVISIONS),
             "divisions": list(data.DIVISIONS.values())}
+
+
+# --- the collection portfolio ----------------------------------------------
+# Use case 1 is a book-level problem: score everyone, segment, size a campaign,
+# forecast the month. These tools do the scoring and the arithmetic; what they
+# deliberately do not do is choose. Which segments to work, on what channel, at
+# what capacity, and what to leave alone is the judgement, and it is the
+# agent's.
+
+@app.get("/portfolio", operation_id="getCollectionPortfolio",
+         summary="The outstanding book: totals and behavioural segments, scored")
+def get_portfolio(division: str | None = None) -> dict:
+    """Every outstanding account, segmented, with expected recovery per segment.
+
+    `expected_recovery` is outstanding x payment probability. Ranking on it
+    rather than on the balance is the entire point: the segment holding the
+    most money is not the segment that yields the most, and a campaign built on
+    the balance column works the accounts least likely to pay.
+    """
+    book = [a for a in portfolio.BOOK
+            if division is None or a.division == division]
+    if not book:
+        raise HTTPException(
+            404, f"No accounts for division {division}. "
+                 f"Known: {', '.join(portfolio.DIVISIONS)}.")
+
+    segments = []
+    for name, meta in portfolio.SEGMENTS.items():
+        rows = [a for a in book if a.segment == name]
+        if not rows:
+            continue
+        due = sum(a.outstanding for a in rows)
+        exp = sum(a.expected_recovery for a in rows)
+        segments.append({
+            "segment": name,
+            "label": meta["label"],
+            "definition": meta["definition"],
+            "accounts": len(rows),
+            "outstanding": round(due, 2),
+            "expected_recovery": round(exp, 2),
+            "mean_payment_probability": round(
+                sum(a.payment_probability for a in rows) / len(rows), 3),
+            "mean_outstanding": round(due / len(rows), 2),
+            "historical_response_by_channel": meta["response"],
+            "note": meta["note"],
+        })
+    segments.sort(key=lambda s: s["expected_recovery"], reverse=True)
+    return {
+        "division": division or "all",
+        "accounts": len(book),
+        "total_outstanding": round(sum(a.outstanding for a in book), 2),
+        "total_expected_recovery": round(sum(a.expected_recovery for a in book), 2),
+        "segments": segments,
+        "scoring_note": (
+            "Payment probability comes from a scoring model over payment "
+            "history, arrears age, contact response and consumption. It is not "
+            "produced by the agent. getConsumerScore returns the features "
+            "behind any individual score."
+        ),
+    }
+
+
+@app.get("/portfolio/accounts", operation_id="listCollectionTargets",
+         summary="Accounts ranked by expected recovery, filterable for a campaign")
+def list_targets(segment: str | None = None, division: str | None = None,
+                 min_outstanding: float = 0, min_probability: float = 0,
+                 limit: int = 20) -> dict:
+    """The ranked working list for a campaign, highest expected recovery first.
+
+    `limit` caps what is returned, not what was matched: `matched` is the size
+    of the real target list and is the number a campaign is sized against.
+    Returning the whole book to a language model would be both useless and
+    expensive.
+    """
+    rows = [
+        a for a in portfolio.BOOK
+        if (segment is None or a.segment == segment)
+        and (division is None or a.division == division)
+        and a.outstanding >= min_outstanding
+        and a.payment_probability >= min_probability
+    ]
+    rows.sort(key=lambda a: a.expected_recovery, reverse=True)
+    shown = rows[: max(1, min(limit, 100))]
+    return {
+        "matched": len(rows),
+        "returned": len(shown),
+        "matched_outstanding": round(sum(a.outstanding for a in rows), 2),
+        "matched_expected_recovery": round(sum(a.expected_recovery for a in rows), 2),
+        "filters_applied": {
+            "segment": segment or "all", "division": division or "all",
+            "min_outstanding": min_outstanding,
+            "min_probability": min_probability,
+            "boundaries": "both minimums are inclusive (>=)",
+            "ranked_by": "expected_recovery = outstanding x payment_probability",
+        },
+        "accounts": [
+            {"consumer_no": a.consumer_no, "division": a.division,
+             "category": a.category, "segment": a.segment,
+             "outstanding": a.outstanding,
+             "payment_probability": a.payment_probability,
+             "expected_recovery": a.expected_recovery,
+             "unpaid_cycles": a.unpaid_cycles,
+             "notices_ignored": a.notices_ignored}
+            for a in shown
+        ],
+    }
+
+
+@app.get("/portfolio/consumers/{consumer_no}/score", operation_id="getConsumerScore",
+         summary="One account's payment probability and the features behind it")
+def get_score(consumer_no: str) -> dict:
+    """The score with its inputs.
+
+    Returned with the contribution of each feature so a score can be explained
+    to the person acting on it. A collection review's first question is always
+    why this account and not that one, and a probability with no derivation
+    cannot answer it.
+    """
+    acc = portfolio.BY_NO.get(consumer_no.upper())
+    if acc is None:
+        raise HTTPException(
+            404, f"No account {consumer_no} in the collection book.")
+    return {
+        "consumer_no": acc.consumer_no, "division": acc.division,
+        "category": acc.category, "segment": acc.segment,
+        "segment_label": portfolio.SEGMENTS[acc.segment]["label"],
+        "outstanding": acc.outstanding,
+        "payment_probability": acc.payment_probability,
+        "expected_recovery": acc.expected_recovery,
+        "feature_contributions": acc.features,
+        "inputs": {
+            "unpaid_cycles": acc.unpaid_cycles,
+            "days_since_last_payment": acc.days_since_last_payment,
+            "on_time_ratio": acc.on_time_ratio,
+            "notices_ignored": acc.notices_ignored,
+            "broken_promises": acc.broken_promises,
+            "connection_age_months": acc.connection_age_months,
+            "has_open_dispute": acc.has_open_dispute,
+            "consumption_last_period": acc.consumption_last_period,
+        },
+    }
+
+
+@app.get("/portfolio/channels", operation_id="getRecoveryChannels",
+         summary="Cost and monthly capacity of each recovery channel")
+def get_channels() -> dict:
+    """What each channel costs per account and how many it can do in a month.
+
+    Field capacity is the binding constraint in every collection programme.
+    It is what turns targeting into an optimisation rather than a ranking:
+    6,000 visits against 24,000 outstanding accounts means choosing.
+    """
+    return {
+        "channels": [{"channel": k, **v} for k, v in portfolio.CHANNELS.items()],
+        "note": ("Capacities are per month for the whole book. A campaign that "
+                 "exceeds one is not a plan."),
+    }
+
+
+@app.get("/portfolio/campaigns", operation_id="getCampaignHistory",
+         summary="Past collection campaigns: channel, segment, cost and recovery")
+def get_campaigns() -> dict:
+    """What has already been tried and what it returned.
+
+    Included because the most common collection mistake is repeating a campaign
+    that did not work, and the record of it is usually in a spreadsheet nobody
+    consults before the next one is planned.
+    """
+    return {"campaigns": portfolio.CAMPAIGNS}
+
+
+@app.get("/portfolio/forecast", operation_id="getCollectionForecast",
+         summary="Expected collection for the coming month, with track record")
+def get_collection_forecast(division: str | None = None) -> dict:
+    """Expected collection, and how the last six forecasts performed.
+
+    The track record is returned unaggregated so the shape of the error shows.
+    A forecast that is consistently over is a different problem from one that
+    scatters, and only the first means the target being set is unreachable.
+    """
+    book = [a for a in portfolio.BOOK
+            if division is None or a.division == division]
+    baseline = sum(a.expected_recovery for a in book)
+    return {
+        "division": division or "all",
+        "method": ("Sum of per-account expected recovery, adjusted for the "
+                   "share historically collected within the month rather than "
+                   "eventually."),
+        "accounts": len(book),
+        "gross_expected_recovery": round(baseline, 2),
+        "within_month_share": 0.58,
+        "forecast_collection_next_month": round(baseline * 0.58, 2),
+        "recent_accuracy": portfolio.FORECAST_HISTORY,
+        "caveat": ("Excludes any campaign not yet run. A forecast is what the "
+                   "book yields at current effort, not a target."),
+    }
