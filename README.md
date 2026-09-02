@@ -67,10 +67,14 @@ supplies the endpoints.
 
 ## Testing the DISCOM agents
 
-[docs/discom-agent-tests.md](docs/discom-agent-tests.md) walks all ten through
-the browser, one input at a time, with what a correct answer contains and the
-wrong answer each case is designed to catch. Every case has a counter-case —
-the second is the one a plausible-sounding model gets wrong.
+[discom-agent-tests.md](https://github.com/shatrunjaysingh/IndicusAI/blob/main/discom-agent-tests.md), in the platform
+repository — the walkthrough is done in that UI, and sits with the other
+platform documents. It takes all ten through the browser one input at a time,
+with what a correct answer contains and the wrong answer each case is designed
+to catch.
+
+The expected figures in it come from `services/discom_data.py` here, so a
+change to a fixture means a change to that document.
 
 ## Seeding a demo
 
