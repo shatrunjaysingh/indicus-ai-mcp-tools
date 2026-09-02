@@ -10,3 +10,4 @@ output/
 *.zip
 *.pdf
 *.log
+services/_portfolio_cache.json

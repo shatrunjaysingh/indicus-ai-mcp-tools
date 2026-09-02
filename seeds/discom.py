@@ -170,6 +170,18 @@ TOOLS = [
          "asserted.",
          "/portfolio/consumers/{consumer_no}/score",
          {"consumer_no": "e.g. DL-700123"}),
+    _get("buildCampaignList",
+         "Selects the top N accounts for a channel from the whole book, sized "
+         "to that channel's monthly capacity, with the segments excluded, the "
+         "expected recovery, the cost and a sample of the list. This is the "
+         "working list a field team receives.",
+         "/portfolio/campaign", None,
+         {"channel": "field_visit | call | sms | notice",
+          "capacity": "accounts to select; defaults to the channel's monthly capacity",
+          "exclude_disputed": "true | false, default true",
+          "exclude_vacated": "true | false, default true",
+          "min_outstanding": "rupees, inclusive",
+          "division": "e.g. Pune East"}),
     _get("getRecoveryChannels",
          "Cost per account and monthly capacity of each recovery channel. "
          "Field capacity is the binding constraint on any campaign.",
@@ -191,7 +203,8 @@ TOOL_NAMES = {t["name"] for t in TOOLS}
 AGENTS = [
     (
         "payment", "Revenue & Collection AI", "deep", "revenue-collection-ai",
-        ["getCollectionPortfolio", "listCollectionTargets", "getConsumerScore",
+        ["getCollectionPortfolio", "buildCampaignList", "listCollectionTargets",
+         "getConsumerScore",
          "getRecoveryChannels", "getCampaignHistory", "getCollectionForecast",
          "getConsumer", "getBillingHistory", "getPaymentHistory",
          "getConsumptionHistory", "getNoticeHistory", "getDisconnectionRecord"],
@@ -211,6 +224,10 @@ AGENTS = [
         "Exclude disputed balances and vacated premises before ranking, and "
         "give their counts — excluding them is a recommendation, not an "
         "omission.\n\n"
+        "When asked to plan a campaign, call buildCampaignList to produce "
+        "the actual working list, and open with the headline: from the "
+        "population, how many accounts were selected, on what channel, and "
+        "what they are expected to recover.\n\n"
         "Read the payment behaviour before the balance. A large arrear on a "
         "consumer who has paid 19 of 24 cycles is a different problem from a "
         "small one on a consumer who has never paid without a notice, and the "

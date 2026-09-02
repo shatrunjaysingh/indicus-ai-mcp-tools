@@ -451,54 +451,132 @@ def list_divisions() -> dict:
 # agent's.
 
 @app.get("/portfolio", operation_id="getCollectionPortfolio",
-         summary="The outstanding book: totals and behavioural segments, scored")
-def get_portfolio(division: str | None = None) -> dict:
-    """Every outstanding account, segmented, with expected recovery per segment.
+         summary="The whole outstanding book: totals and behavioural segments, scored")
+def get_portfolio() -> dict:
+    """Every outstanding consumer, segmented, with expected recovery per segment.
 
     `expected_recovery` is outstanding x payment probability. Ranking on it
     rather than on the balance is the entire point: the segment holding the
     most money is not the segment that yields the most, and a campaign built on
     the balance column works the accounts least likely to pay.
     """
-    book = [a for a in portfolio.BOOK
-            if division is None or a.division == division]
-    if not book:
-        raise HTTPException(
-            404, f"No accounts for division {division}. "
-                 f"Known: {', '.join(portfolio.DIVISIONS)}.")
-
+    totals = portfolio.SEGMENT_TOTALS
+    accounts = sum(v["accounts"] for v in totals.values())
     segments = []
     for name, meta in portfolio.SEGMENTS.items():
-        rows = [a for a in book if a.segment == name]
-        if not rows:
+        v = totals.get(name)
+        if not v or not v["accounts"]:
             continue
-        due = sum(a.outstanding for a in rows)
-        exp = sum(a.expected_recovery for a in rows)
         segments.append({
-            "segment": name,
-            "label": meta["label"],
+            "segment": name, "label": meta["label"],
             "definition": meta["definition"],
-            "accounts": len(rows),
-            "outstanding": round(due, 2),
-            "expected_recovery": round(exp, 2),
-            "mean_payment_probability": round(
-                sum(a.payment_probability for a in rows) / len(rows), 3),
-            "mean_outstanding": round(due / len(rows), 2),
+            "accounts": v["accounts"],
+            "outstanding": round(v["outstanding"], 2),
+            "expected_recovery": round(v["expected"], 2),
+            "mean_payment_probability": round(v["p_sum"] / v["accounts"], 3),
+            "mean_outstanding": round(v["outstanding"] / v["accounts"], 2),
             "historical_response_by_channel": meta["response"],
             "note": meta["note"],
         })
-    segments.sort(key=lambda s: s["expected_recovery"], reverse=True)
+    segments.sort(key=lambda x: x["expected_recovery"], reverse=True)
     return {
-        "division": division or "all",
-        "accounts": len(book),
-        "total_outstanding": round(sum(a.outstanding for a in book), 2),
-        "total_expected_recovery": round(sum(a.expected_recovery for a in book), 2),
+        "population": accounts,
+        "total_outstanding": round(sum(v["outstanding"] for v in totals.values()), 2),
+        "total_expected_recovery": round(sum(v["expected"] for v in totals.values()), 2),
         "segments": segments,
+        "by_division": {
+            d: {"accounts": v["accounts"],
+                "outstanding": round(v["outstanding"], 2),
+                "expected_recovery": round(v["expected"], 2)}
+            for d, v in portfolio.DIVISION_TOTALS.items()
+        },
         "scoring_note": (
-            "Payment probability comes from a scoring model over payment "
-            "history, arrears age, contact response and consumption. It is not "
-            "produced by the agent. getConsumerScore returns the features "
-            "behind any individual score."
+            "Payment probability comes from a scoring model run over the whole "
+            "book. It is not produced by the agent. getConsumerScore returns "
+            "the features behind any individual score."
+        ),
+    }
+
+
+@app.get("/portfolio/campaign", operation_id="buildCampaignList",
+         summary="Select the top N accounts for a channel, and size the campaign")
+def build_campaign(channel: str = "field_visit", capacity: int = 0,
+                   exclude_disputed: bool = True,
+                   exclude_vacated: bool = True,
+                   min_outstanding: float = 0,
+                   division: str | None = None) -> dict:
+    """The working list: the highest expected-recovery accounts a channel can
+    reach, with what the selection is worth.
+
+    This is the deliverable — from the whole book, the N accounts a field team
+    should actually visit. The selection is done here rather than by the agent
+    because it is a ranking over a million rows; what the agent decides is the
+    channel, the capacity, and what to exclude, which is where the judgement
+    is.
+
+    Excluded groups are counted rather than silently dropped. A campaign that
+    does not say what it left out cannot be reviewed.
+    """
+    spec = portfolio.CHANNELS.get(channel)
+    if spec is None:
+        raise HTTPException(
+            404, f"Unknown channel {channel}. "
+                 f"Known: {', '.join(portfolio.CHANNELS)}.")
+    cap = capacity if capacity > 0 else spec["capacity_per_month"]
+    if cap > spec["capacity_per_month"]:
+        raise HTTPException(
+            400,
+            f"{channel} capacity is {spec['capacity_per_month']:,} per month; "
+            f"{cap:,} was requested. A campaign that exceeds the capacity is "
+            f"not executable.")
+
+    excluded = {}
+    if exclude_disputed:
+        excluded["disputed"] = portfolio.SEGMENT_TOTALS["disputed"]["accounts"]
+    if exclude_vacated:
+        excluded["gone_away"] = portfolio.SEGMENT_TOTALS["gone_away"]["accounts"]
+
+    pool = [
+        a for a in portfolio.TOP
+        if a.outstanding >= min_outstanding
+        and (division is None or a.division == division)
+        and not (exclude_disputed and a.segment == "disputed")
+        and not (exclude_vacated and a.segment == "gone_away")
+    ]
+    selected = pool[:cap]
+    exp = sum(a.expected_recovery for a in selected)
+    due = sum(a.outstanding for a in selected)
+    cost = len(selected) * spec["cost_per_account"]
+
+    from collections import Counter
+    mix = Counter(a.segment for a in selected)
+
+    return {
+        "population": sum(v["accounts"] for v in portfolio.SEGMENT_TOTALS.values()),
+        "selected": len(selected),
+        "channel": channel,
+        "capacity_used": f"{len(selected):,} of {spec['capacity_per_month']:,}",
+        "selection_criteria": {
+            "ranked_by": "expected_recovery = outstanding x payment_probability",
+            "min_outstanding": min_outstanding,
+            "division": division or "all",
+            "excluded_segments": excluded or "none",
+        },
+        "outstanding_selected": round(due, 2),
+        "expected_recovery": round(exp, 2),
+        "campaign_cost": round(cost, 2),
+        "return_per_rupee_cost": round(exp / cost, 1) if cost else None,
+        "segment_mix": dict(mix.most_common()),
+        "sample": [
+            {"consumer_no": a.consumer_no, "division": a.division,
+             "segment": a.segment, "outstanding": a.outstanding,
+             "payment_probability": a.payment_probability,
+             "expected_recovery": a.expected_recovery}
+            for a in selected[:10]
+        ],
+        "note": (
+            f"Ranked list of {len(selected):,} accounts. The full list is "
+            f"exported to the field system; the sample above is the top ten."
         ),
     }
 
@@ -516,7 +594,7 @@ def list_targets(segment: str | None = None, division: str | None = None,
     expensive.
     """
     rows = [
-        a for a in portfolio.BOOK
+        a for a in portfolio.TOP
         if (segment is None or a.segment == segment)
         and (division is None or a.division == division)
         and a.outstanding >= min_outstanding
@@ -621,15 +699,22 @@ def get_collection_forecast(division: str | None = None) -> dict:
     A forecast that is consistently over is a different problem from one that
     scatters, and only the first means the target being set is unreachable.
     """
-    book = [a for a in portfolio.BOOK
-            if division is None or a.division == division]
-    baseline = sum(a.expected_recovery for a in book)
+    totals = portfolio.DIVISION_TOTALS
+    if division:
+        if division not in totals:
+            raise HTTPException(
+                404, f"No division {division}. Known: {', '.join(totals)}.")
+        baseline = totals[division]["expected"]
+        count = totals[division]["accounts"]
+    else:
+        baseline = sum(v["expected"] for v in totals.values())
+        count = sum(v["accounts"] for v in totals.values())
     return {
         "division": division or "all",
         "method": ("Sum of per-account expected recovery, adjusted for the "
                    "share historically collected within the month rather than "
                    "eventually."),
-        "accounts": len(book),
+        "accounts": count,
         "gross_expected_recovery": round(baseline, 2),
         "within_month_share": 0.58,
         "forecast_collection_next_month": round(baseline * 0.58, 2),

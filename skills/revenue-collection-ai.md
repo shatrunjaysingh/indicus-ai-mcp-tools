@@ -8,6 +8,7 @@ description: >
   should receive.
 allowed-tools:
   - getCollectionPortfolio
+  - buildCampaignList
   - listCollectionTargets
   - getConsumerScore
   - getRecoveryChannels
@@ -113,6 +114,21 @@ A forecast is what the book yields at current effort. If you are also
 recommending a campaign, give the two separately: baseline, and the incremental
 recovery the campaign is expected to add. Merging them produces a number that
 cannot be held to.
+
+### Producing the list
+
+A campaign recommendation is not a paragraph about segments — it is a working
+list a field team receives. `buildCampaignList` produces it: give it the
+channel, the capacity and what to exclude, and it ranks the whole book and
+returns the selection with its size, cost and expected recovery.
+
+Open with the headline, in this shape:
+
+> From 10,00,000 outstanding consumers, 6,000 accounts selected for field
+> intervention — ₹152 cr expected recovery against ₹15.6 L of visits.
+
+Population first, then the number selected, then what it is worth. That
+sentence is what a CGM reads; everything after it is the justification.
 
 ### Output for a book-level answer
 

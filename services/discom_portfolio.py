@@ -17,18 +17,37 @@ does with a score, and a score whose derivation nobody can see makes every
 downstream answer unfalsifiable. In a real deployment this is a gradient
 boosting model over the same features, and everything above it is unchanged.
 
-24,000 consumers, generated deterministically. Not ten lakh — the architecture
-is what scales, and a fixture that claims a scale it does not have is the kind
-of thing a client checks.
+Ten lakh consumers, streamed rather than stored. The population is generated
+deterministically and consumed as it goes: per-segment aggregates accumulate,
+and a bounded heap keeps the highest expected-recovery accounts. Nothing holds
+a million rows, and nothing needs to — the only accounts anyone works are the
+ones at the top of the ranking, and the only thing anyone needs about the rest
+is the totals.
+
+That is also the shape of the real system. A scoring job runs over the whole
+book nightly and writes a ranked working list; nobody loads ten lakh accounts
+into anything interactive, least of all a language model.
 """
 
 from __future__ import annotations
 
+import heapq
+import json
 import random
-from dataclasses import dataclass, field
+from pathlib import Path
+from dataclasses import asdict, dataclass, field
 
 SEED = 20260901
-POPULATION = 24_000
+POPULATION = 1_000_000
+
+# How many top-ranked accounts to keep for the working list.
+#
+# Sized above the largest channel capacity (calls, 40,000) with headroom, so
+# that a campaign on any channel can be filled from it after exclusions. At
+# 6,000 a field campaign already exhausted the pool and a call campaign could
+# never be sized at all — the ranking silently ran out, which looks identical
+# to there being no more accounts worth working.
+MATERIALISE = 60_000
 
 DIVISIONS = ["Pune East", "Pune West", "Pune Rural"]
 CATEGORIES = ["LT-1 Domestic", "LT-2 Commercial", "HT Industrial", "LT-5 Agricultural"]
@@ -184,11 +203,24 @@ def _score(a: Account) -> tuple[float, dict]:
     return round(p, 4), {"segment_prior": base, **contribs}
 
 
-def _build() -> list[Account]:
+def _generate() -> tuple[list[Account], dict, dict]:
+    """Stream the book once: accumulate aggregates, keep the top accounts.
+
+    A heap rather than a sort, because sorting a million rows to take six
+    thousand of them costs the memory this is written to avoid.
+    """
     rng = random.Random(SEED)
-    out: list[Account] = []
     cats = list(_MIX)
     weights = [_MIX[c]["share"] for c in cats]
+
+    heap: list[tuple[float, int, Account]] = []
+    agg: dict[str, dict] = {
+        name: {"accounts": 0, "outstanding": 0.0, "expected": 0.0, "p_sum": 0.0}
+        for name in SEGMENTS
+    }
+    by_division: dict[str, dict] = {
+        d: {"accounts": 0, "outstanding": 0.0, "expected": 0.0} for d in DIVISIONS
+    }
 
     for i in range(POPULATION):
         cat = rng.choices(cats, weights=weights)[0]
@@ -202,32 +234,76 @@ def _build() -> list[Account]:
         notices = rng.choices([0, 1, 2, 3, 4], weights=[38, 27, 18, 11, 6])[0]
         broken = rng.choices([0, 1, 2], weights=[82, 14, 4])[0]
         vacated = rng.random() < 0.055
+        division = rng.choices(DIVISIONS, weights=[0.42, 0.33, 0.25])[0]
+
         acc = Account(
             consumer_no=f"{'DL' if cat.startswith('LT-1') else 'CM' if cat.startswith('LT-2') else 'IN' if cat.startswith('HT') else 'AG'}-{700000 + i}",
-            division=rng.choices(DIVISIONS, weights=[0.42, 0.33, 0.25])[0],
-            category=cat,
-            outstanding=round(due, 2),
+            division=division, category=cat, outstanding=round(due, 2),
             unpaid_cycles=unpaid,
             days_since_last_payment=min(900, unpaid * 30 + rng.randint(0, 45)),
-            on_time_ratio=round(on_time, 3),
-            notices_ignored=notices,
-            broken_promises=broken,
-            connection_age_months=age,
+            on_time_ratio=round(on_time, 3), notices_ignored=notices,
+            broken_promises=broken, connection_age_months=age,
             has_open_dispute=rng.random() < 0.043,
             consumption_last_period=0 if vacated else rng.randint(40, 900),
         )
         acc.segment = _segment_for(acc)
         acc.payment_probability, acc.features = _score(acc)
-        # The figure a campaign is actually ranked on. Neither probability nor
-        # amount alone: a certain ₹800 and an unlikely ₹90,000 are both worth
-        # less than a probable ₹40,000.
         acc.expected_recovery = round(acc.outstanding * acc.payment_probability, 2)
-        out.append(acc)
-    return out
+
+        a = agg[acc.segment]
+        a["accounts"] += 1
+        a["outstanding"] += acc.outstanding
+        a["expected"] += acc.expected_recovery
+        a["p_sum"] += acc.payment_probability
+        d = by_division[division]
+        d["accounts"] += 1
+        d["outstanding"] += acc.outstanding
+        d["expected"] += acc.expected_recovery
+
+        if len(heap) < MATERIALISE:
+            heapq.heappush(heap, (acc.expected_recovery, i, acc))
+        elif acc.expected_recovery > heap[0][0]:
+            heapq.heapreplace(heap, (acc.expected_recovery, i, acc))
+
+    top = [a for _e, _i, a in sorted(heap, key=lambda t: -t[0])]
+    return top, agg, by_division
 
 
-BOOK: list[Account] = _build()
-BY_NO: dict[str, Account] = {a.consumer_no: a for a in BOOK}
+def _load() -> tuple[list[Account], dict, dict]:
+    """Generate once, then load from cache.
+
+    Streaming ten lakh accounts takes about twenty seconds. Paying that on
+    every import would mean paying it on every container start and in every
+    test collection, for a population that is deterministic and never changes.
+    The cache key is the seed and the population size, so editing either
+    regenerates rather than silently serving a stale book.
+    """
+    key = f"{SEED}-{POPULATION}-{MATERIALISE}"
+    cache = Path(__file__).resolve().parent / "_portfolio_cache.json"
+    if cache.exists():
+        try:
+            blob = json.loads(cache.read_text())
+            if blob.get("key") == key:
+                top = [Account(**a) for a in blob["top"]]
+                return top, blob["segments"], blob["divisions"]
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass  # regenerate rather than fail on a cache written by older code
+
+    top, segments, divisions = _generate()
+    try:
+        cache.write_text(json.dumps({
+            "key": key,
+            "top": [asdict(a) for a in top],
+            "segments": segments, "divisions": divisions,
+        }))
+    except OSError:
+        # A read-only image is fine; it just pays the generation each start.
+        pass
+    return top, segments, divisions
+
+
+TOP, SEGMENT_TOTALS, DIVISION_TOTALS = _load()
+BY_NO: dict[str, Account] = {a.consumer_no: a for a in TOP}
 
 
 # --- what has already been tried -------------------------------------------
