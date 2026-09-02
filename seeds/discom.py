@@ -182,6 +182,14 @@ TOOLS = [
           "exclude_vacated": "true | false, default true",
           "min_outstanding": "rupees, inclusive",
           "division": "e.g. Pune East"}),
+    _get("listEarlyWarning",
+         "Accounts most likely to become chronic defaulters, ranked on chronic "
+         "risk rather than payment probability. Accounts already chronic score "
+         "zero — the point is who can still be caught.",
+         "/portfolio/early-warning", None,
+         {"limit": "rows to return, max 100",
+          "min_risk": "0-1, inclusive",
+          "division": "e.g. Pune East"}),
     _get("getRecoveryChannels",
          "Cost per account and monthly capacity of each recovery channel. "
          "Field capacity is the binding constraint on any campaign.",
@@ -203,8 +211,8 @@ TOOL_NAMES = {t["name"] for t in TOOLS}
 AGENTS = [
     (
         "payment", "Revenue & Collection AI", "deep", "revenue-collection-ai",
-        ["getCollectionPortfolio", "buildCampaignList", "listCollectionTargets",
-         "getConsumerScore",
+        ["getCollectionPortfolio", "buildCampaignList", "listEarlyWarning",
+         "listCollectionTargets", "getConsumerScore",
          "getRecoveryChannels", "getCampaignHistory", "getCollectionForecast",
          "getConsumer", "getBillingHistory", "getPaymentHistory",
          "getConsumptionHistory", "getNoticeHistory", "getDisconnectionRecord"],

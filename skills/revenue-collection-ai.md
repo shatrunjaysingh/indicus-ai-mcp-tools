@@ -9,6 +9,7 @@ description: >
 allowed-tools:
   - getCollectionPortfolio
   - buildCampaignList
+  - listEarlyWarning
   - listCollectionTargets
   - getConsumerScore
   - getRecoveryChannels
@@ -43,6 +44,32 @@ go to *Single account* below.
 
 Anything else — a segment, a division, a campaign, a forecast, a target — means
 work the book. Start with `getCollectionPortfolio`.
+
+### What each question needs
+
+These arrive in the words of the collection programme they came from. Each is a
+different question with a different tool behind it, and the failure is
+answering one of them with another's output.
+
+| Asked for | Do this |
+|---|---|
+| **Payment probability for every consumer** | `getCollectionPortfolio` for the scored population and the segment distribution; `getConsumerScore` to show what a single score is made of. **Do not produce probabilities yourself** — say the model scored the whole book, give the distribution, and demonstrate on one account. |
+| **High-risk defaulters, before they become chronic** | `listEarlyWarning`. Rank on **chronic risk**, not payment probability — they answer different questions, and an account can be paying today and still be tipping. Say what makes each one catchable now. |
+| **The best recovery action** | The ladder is SMS → call → field visit → notice → disconnection. Match the channel to the segment's historical response, not to the size of the debt. Disconnection is gated on eligibility, never on value. |
+| **Expected collection next month** | `getCollectionForecast`. Give the figure, then the shape of the recent error. |
+| **Segment consumers by payment behaviour** | `getCollectionPortfolio`. Give each segment's definition, size, money and mean probability — and say what each one implies for treatment, or it is a table rather than an answer. |
+| **Optimise collection campaigns** | `getCampaignHistory` first, then `buildCampaignList`. What has already been tried and what it returned is the starting point, not an afterthought. |
+
+### Disconnection is not a ranking
+
+Every other channel can be pointed at the highest-value accounts. This one
+cannot. `buildCampaignList` with `channel=disconnection` applies the
+precondition — notice served, notice period expired, undisputed, billed on
+actual reads — and returns the counts blocked by each reason.
+
+Report those counts. An account blocked for want of a served notice is not a
+dead end; it is an account whose next action is the notice. Treating the
+blocked list as a rejection loses the entire pipeline behind the campaign.
 
 ---
 

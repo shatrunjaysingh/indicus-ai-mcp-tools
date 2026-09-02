@@ -49,6 +49,12 @@ POPULATION = 1_000_000
 # to there being no more accounts worth working.
 MATERIALISE = 60_000
 
+# What counts as "at risk of becoming chronic" for the headline count. The
+# score ranks the whole deteriorating segment; this is the band worth acting on
+# this month. At 0.5 the count was 97% of the segment — true, and no use for
+# targeting anything.
+AT_RISK_THRESHOLD = 0.72
+
 DIVISIONS = ["Pune East", "Pune West", "Pune Rural"]
 CATEGORIES = ["LT-1 Domestic", "LT-2 Commercial", "HT Industrial", "LT-5 Agricultural"]
 
@@ -136,6 +142,11 @@ CHANNELS = {
     "call":        {"cost_per_account": 12.0, "capacity_per_month": 40_000},
     "field_visit": {"cost_per_account": 260.0, "capacity_per_month": 6_000},
     "notice":      {"cost_per_account": 45.0, "capacity_per_month": 25_000},
+    # The last rung. Cheaper per account than a visit because the crew is
+    # already doing rounds, and capacity-limited for the same reason. Unlike
+    # every other channel this one has a legal precondition, so an account
+    # being high-value is not enough to put it on the list — see `dc_eligible`.
+    "disconnection": {"cost_per_account": 180.0, "capacity_per_month": 3_000},
 }
 
 
@@ -153,9 +164,20 @@ class Account:
     connection_age_months: int
     has_open_dispute: bool
     consumption_last_period: int
+    notice_served: bool = False
+    notice_expired: bool = False
+    billed_on_actual_reads: bool = True
     segment: str = ""
     payment_probability: float = 0.0
     expected_recovery: float = 0.0
+    # Probability of becoming a chronic defaulter within two quarters, for
+    # accounts that are not chronic yet. This is the "catch them before they
+    # tip" signal; it is deliberately separate from payment probability, which
+    # answers a different question — one is about this month's collection, the
+    # other about next year's book.
+    chronic_risk: float = 0.0
+    dc_eligible: bool = False
+    dc_blocked_by: str = ""
     features: dict = field(default_factory=dict)
 
 
@@ -203,6 +225,65 @@ def _score(a: Account) -> tuple[float, dict]:
     return round(p, 4), {"segment_prior": base, **contribs}
 
 
+def _chronic_risk(a: Account) -> float:
+    """How likely this account is to be chronic in two quarters.
+
+    Trajectory, not level. An account four cycles down and accelerating is
+    closer to chronic than one eight cycles down that has stabilised.
+
+    The segment sets the base rate, because the segmentation already encodes
+    the trajectory: `recent_deterioration` *is* the population in the act of
+    tipping, and a signal that does not rank it highest is measuring something
+    else. An earlier version subtracted a protective term for a good payment
+    history, which inverted the whole thing — a long clean record followed by
+    missed cycles is the alarming case, not the reassuring one. It ranked
+    reliable payers above the deteriorating segment.
+
+    Zero for accounts already chronic, vacated, or disputed. The question is
+    who can still be caught.
+    """
+    base = {
+        "recent_deterioration": 0.55,
+        "new_connection_arrears": 0.34,
+        "reliable_slow": 0.08,
+    }.get(a.segment)
+    if base is None:
+        return 0.0
+
+    risk = base
+    # Distance to the six-cycle chronic threshold.
+    risk += 0.26 * (min(a.unpaid_cycles, 6) / 6.0)
+    risk += 0.16 * (min(a.notices_ignored, 3) / 3.0)
+    risk += 0.14 * (min(a.broken_promises, 2) / 2.0)
+    risk += 0.10 * (min(a.days_since_last_payment, 365) / 365.0)
+    if a.consumption_last_period == 0:
+        risk += 0.08
+    # Still paying most cycles is the one genuinely protective fact, and it is
+    # worth far less than the trajectory terms above.
+    risk -= 0.12 * a.on_time_ratio
+    return round(max(0.0, min(0.99, risk)), 4)
+
+
+def _disconnection_eligibility(a: Account) -> tuple[bool, str]:
+    """Whether this account may lawfully be disconnected, and what blocks it.
+
+    Not a ranking input — a gate. Every other channel can be pointed at the
+    highest-value accounts; this one cannot, and an eligible-but-small account
+    outranks a large one that has had no notice. The reason is returned so a
+    blocked account can be routed to the step that unblocks it rather than
+    silently dropped.
+    """
+    if a.has_open_dispute:
+        return False, "balance disputed"
+    if not a.billed_on_actual_reads:
+        return False, "billed on estimated reads"
+    if not a.notice_served:
+        return False, "no statutory notice served"
+    if not a.notice_expired:
+        return False, "notice period not expired"
+    return True, ""
+
+
 def _generate() -> tuple[list[Account], dict, dict]:
     """Stream the book once: accumulate aggregates, keep the top accounts.
 
@@ -215,7 +296,9 @@ def _generate() -> tuple[list[Account], dict, dict]:
 
     heap: list[tuple[float, int, Account]] = []
     agg: dict[str, dict] = {
-        name: {"accounts": 0, "outstanding": 0.0, "expected": 0.0, "p_sum": 0.0}
+        name: {"accounts": 0, "outstanding": 0.0, "expected": 0.0,
+               "p_sum": 0.0, "at_risk": 0, "at_risk_outstanding": 0.0,
+               "dc_eligible": 0}
         for name in SEGMENTS
     }
     by_division: dict[str, dict] = {
@@ -245,16 +328,28 @@ def _generate() -> tuple[list[Account], dict, dict]:
             broken_promises=broken, connection_age_months=age,
             has_open_dispute=rng.random() < 0.043,
             consumption_last_period=0 if vacated else rng.randint(40, 900),
+            # Notice practice tracks how far down the account is: nobody serves
+            # a statutory notice on a single missed cycle.
+            notice_served=notices > 0 or unpaid >= 4,
+            notice_expired=notices > 0 and unpaid >= 5,
+            billed_on_actual_reads=rng.random() > 0.07,
         )
         acc.segment = _segment_for(acc)
         acc.payment_probability, acc.features = _score(acc)
         acc.expected_recovery = round(acc.outstanding * acc.payment_probability, 2)
+        acc.chronic_risk = _chronic_risk(acc)
+        acc.dc_eligible, acc.dc_blocked_by = _disconnection_eligibility(acc)
 
         a = agg[acc.segment]
         a["accounts"] += 1
         a["outstanding"] += acc.outstanding
         a["expected"] += acc.expected_recovery
         a["p_sum"] += acc.payment_probability
+        if acc.chronic_risk >= AT_RISK_THRESHOLD:
+            a["at_risk"] += 1
+            a["at_risk_outstanding"] += acc.outstanding
+        if acc.dc_eligible:
+            a["dc_eligible"] += 1
         d = by_division[division]
         d["accounts"] += 1
         d["outstanding"] += acc.outstanding
@@ -278,7 +373,11 @@ def _load() -> tuple[list[Account], dict, dict]:
     The cache key is the seed and the population size, so editing either
     regenerates rather than silently serving a stale book.
     """
-    key = f"{SEED}-{POPULATION}-{MATERIALISE}"
+    # Every input that changes what is stored belongs in the key. The
+    # threshold was left out once and the cache went on serving counts
+    # computed at the old value — the tool reported the new threshold
+    # beside the old number, which is worse than either alone.
+    key = f"{SEED}-{POPULATION}-{MATERIALISE}-{AT_RISK_THRESHOLD}"
     cache = Path(__file__).resolve().parent / "_portfolio_cache.json"
     if cache.exists():
         try:

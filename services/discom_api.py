@@ -539,6 +539,10 @@ def build_campaign(channel: str = "field_visit", capacity: int = 0,
     pool = [
         a for a in portfolio.TOP
         if a.outstanding >= min_outstanding
+        # Disconnection is the one channel with a legal precondition. A
+        # high-value account with no served notice is not a target, however far
+        # up the ranking it sits.
+        and (channel != "disconnection" or a.dc_eligible)
         and (division is None or a.division == division)
         and not (exclude_disputed and a.segment == "disputed")
         and not (exclude_vacated and a.segment == "gone_away")
@@ -550,6 +554,9 @@ def build_campaign(channel: str = "field_visit", capacity: int = 0,
 
     from collections import Counter
     mix = Counter(a.segment for a in selected)
+    blocked = Counter(
+        a.dc_blocked_by for a in portfolio.TOP
+        if channel == "disconnection" and not a.dc_eligible)
 
     return {
         "population": sum(v["accounts"] for v in portfolio.SEGMENT_TOTALS.values()),
@@ -567,6 +574,7 @@ def build_campaign(channel: str = "field_visit", capacity: int = 0,
         "campaign_cost": round(cost, 2),
         "return_per_rupee_cost": round(exp / cost, 1) if cost else None,
         "segment_mix": dict(mix.most_common()),
+        "disconnection_ineligible": dict(blocked.most_common()) or None,
         "sample": [
             {"consumer_no": a.consumer_no, "division": a.division,
              "segment": a.segment, "outstanding": a.outstanding,
@@ -659,6 +667,48 @@ def get_score(consumer_no: str) -> dict:
             "has_open_dispute": acc.has_open_dispute,
             "consumption_last_period": acc.consumption_last_period,
         },
+    }
+
+
+@app.get("/portfolio/early-warning", operation_id="listEarlyWarning",
+         summary="Accounts most likely to become chronic defaulters, ranked")
+def list_early_warning(limit: int = 20, min_risk: float = 0.5,
+                       division: str | None = None) -> dict:
+    """Accounts heading for chronic default, before they get there.
+
+    Ranked on chronic risk, not on payment probability — they answer different
+    questions. Payment probability is about collecting this month; chronic risk
+    is about whether this account is still collectable next year. An account
+    can be low risk and unlikely to pay now, or high risk and paying today.
+
+    Accounts already chronic score zero. The point is who can still be caught.
+    """
+    rows = [
+        a for a in portfolio.TOP
+        if a.chronic_risk >= min_risk
+        and (division is None or a.division == division)
+    ]
+    rows.sort(key=lambda a: a.chronic_risk, reverse=True)
+    totals = portfolio.SEGMENT_TOTALS
+    return {
+        "population_at_risk": sum(v["at_risk"] for v in totals.values()),
+        "population_at_risk_outstanding": round(
+            sum(v["at_risk_outstanding"] for v in totals.values()), 2),
+        "at_risk_threshold": portfolio.AT_RISK_THRESHOLD,
+        "matched_in_working_list": len(rows),
+        "note": ("population_at_risk counts the whole book above the threshold; "
+                 "the rows below are drawn from the materialised working list "
+                 "of highest-value accounts."),
+        "accounts": [
+            {"consumer_no": a.consumer_no, "division": a.division,
+             "segment": a.segment, "outstanding": a.outstanding,
+             "chronic_risk": a.chronic_risk,
+             "payment_probability": a.payment_probability,
+             "unpaid_cycles": a.unpaid_cycles,
+             "notices_ignored": a.notices_ignored,
+             "broken_promises": a.broken_promises}
+            for a in rows[: max(1, min(limit, 100))]
+        ],
     }
 
 
