@@ -1,5 +1,5 @@
 ---
-name: discom-asset-failure-risk
+name: predictive-maintenance
 description: >
   Assesses one distribution asset — DT, transformer, feeder or breaker — for
   failure risk from loading, thermal trend, age, maintenance and failure

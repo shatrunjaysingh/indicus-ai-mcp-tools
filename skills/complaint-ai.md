@@ -1,5 +1,5 @@
 ---
-name: discom-complaint-triage
+name: complaint-ai
 description: >
   Classifies an incoming consumer complaint, assigns category, priority and
   owning department, identifies repeats and escalation risk, and predicts SLA

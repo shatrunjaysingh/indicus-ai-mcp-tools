@@ -1,5 +1,5 @@
 ---
-name: discom-load-forecast-review
+name: load-forecasting
 description: >
   Reviews a demand forecast for a feeder, subdivision, division or circle —
   what it assumes, how it has performed against actuals, where it is most

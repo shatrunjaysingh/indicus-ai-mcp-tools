@@ -1,5 +1,5 @@
 ---
-name: discom-illegal-restoration
+name: illegal-restoration-detection
 description: >
   Detects supply restored without authorisation after a disconnection, by
   comparing the disconnection date against subsequent consumption, meter

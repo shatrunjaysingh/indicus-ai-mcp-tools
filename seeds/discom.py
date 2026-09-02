@@ -156,7 +156,7 @@ TOOL_NAMES = {t["name"] for t in TOOLS}
 # (key, agent name, model tier, skill, tools, system prompt)
 AGENTS = [
     (
-        "payment", "Payment Risk Analyst", "deep", "discom-payment-risk",
+        "payment", "Revenue & Collection AI", "deep", "revenue-collection-ai",
         ["getConsumer", "getBillingHistory", "getPaymentHistory",
          "getConsumptionHistory", "getNoticeHistory", "getDisconnectionRecord"],
         "You decide what collection action one outstanding account receives.\n\n"
@@ -169,8 +169,8 @@ AGENTS = [
         "disputed, the answer is HOLD.",
     ),
     (
-        "recovery", "TD Recovery Prioritiser", "deep",
-        "discom-td-recovery-priority",
+        "recovery", "TD Recovery Prediction", "deep",
+        "td-recovery-prediction",
         ["getConsumer", "getDisconnectionRecord", "getPaymentHistory",
          "getBillingHistory", "getConsumptionHistory", "getMeterStatus",
          "getSiteSurvey", "getNoticeHistory"],
@@ -184,7 +184,7 @@ AGENTS = [
         "consumption data.",
     ),
     (
-        "theft", "Theft Anomaly Analyst", "deep", "discom-theft-detection",
+        "theft", "Theft/Anomaly Detection", "deep", "theft-anomaly-detection",
         ["getConsumer", "getConsumptionHistory", "getMeterStatus",
          "getPeerBenchmark", "getBillingHistory", "getSiteSurvey",
          "getFeederLosses"],
@@ -200,7 +200,7 @@ AGENTS = [
         "theft under section 135, and never name a person as a thief.",
     ),
     (
-        "survey", "Site Survey Reviewer", "fast", "discom-site-survey",
+        "survey", "AI Site Survey", "fast", "ai-site-survey",
         ["getSiteSurvey", "getSurveyImageAnalysis", "getConsumer",
          "getMeterStatus", "getDisconnectionRecord", "getConsumptionHistory"],
         "You review detections, not photographs. Every label from the image "
@@ -216,8 +216,8 @@ AGENTS = [
         "every time.",
     ),
     (
-        "restoration", "Illegal Restoration Analyst", "deep",
-        "discom-illegal-restoration",
+        "restoration", "Illegal Restoration Detection", "deep",
+        "illegal-restoration-detection",
         ["getConsumer", "getDisconnectionRecord", "getConsumptionHistory",
          "getMeterStatus", "getSiteSurvey", "getBillingHistory"],
         "You decide whether post-disconnection consumption is unauthorised "
@@ -232,7 +232,7 @@ AGENTS = [
         "case.",
     ),
     (
-        "complaint", "Complaint Triage", "fast", "discom-complaint-triage",
+        "complaint", "Complaint AI", "fast", "complaint-ai",
         ["getComplaint", "listComplaints", "getComplaintHistory", "getConsumer",
          "getConsumptionHistory", "getBillingHistory", "getOutageHistory"],
         "You route one complaint.\n\n"
@@ -247,7 +247,7 @@ AGENTS = [
         "LOW priority.",
     ),
     (
-        "call", "Call Quality Analyst", "deep", "discom-call-analysis",
+        "call", "Call Centre AI", "deep", "call-centre-ai",
         ["getCallTranscript", "getConsumer", "getBillingHistory",
          "getComplaintHistory", "getDisconnectionRecord", "getOutageHistory"],
         "You establish what a caller needed, whether they got it, and what "
@@ -261,7 +261,7 @@ AGENTS = [
         "you look for consumer misconduct.",
     ),
     (
-        "asset", "Asset Risk Analyst", "deep", "discom-asset-failure-risk",
+        "asset", "Predictive Maintenance", "deep", "predictive-maintenance",
         ["getDTHealth", "getLoadHistory", "getMaintenanceHistory",
          "getOutageHistory", "getFeederLosses"],
         "You decide which asset a maintenance crew attends next.\n\n"
@@ -277,8 +277,8 @@ AGENTS = [
         "band.",
     ),
     (
-        "forecast", "Load Forecast Reviewer", "deep",
-        "discom-load-forecast-review",
+        "forecast", "Load Forecasting", "deep",
+        "load-forecasting",
         ["getLoadForecast", "getLoadHistory", "getWeatherContext",
          "getOutageHistory", "getFeederLosses"],
         "You review a forecast that power will be bought against; you do not "
@@ -292,7 +292,7 @@ AGENTS = [
         "magnitude of scatter, and it is invisible in a mean absolute error.",
     ),
     (
-        "copilot", "DISCOM Copilot", "deep", "discom-copilot",
+        "copilot", "AI Employee Copilot", "deep", "ai-employee-copilot",
         ["listTDConsumers", "getDivisionSummary", "listDivisions",
          "getConsumer", "getBillingHistory", "getPaymentHistory",
          "getDisconnectionRecord", "getConsumptionHistory", "getFeederLosses"],
@@ -503,18 +503,22 @@ async def main() -> None:
 
         print(f"\nDone. Workspace: {WORKSPACE_NAME}")
         print("\nTry each agent in chat:")
-        for line in [
-            "  Payment Risk Analyst      DL-4471002",
-            "  TD Recovery Prioritiser   CM-8890145   then DL-2245108",
-            "  Theft Anomaly Analyst     CM-5561093   then IN-7734021",
-            "  Site Survey Reviewer      CM-8890145",
-            "  Illegal Restoration       CM-8890145",
-            "  Complaint Triage          CMP-33012, CMP-33018, CMP-33021",
-            "  Call Quality Analyst      CALL-77201",
-            "  Asset Risk Analyst        DT-4587      then DT-2210",
-            "  Load Forecast Reviewer    F-07-HDP",
-            "  DISCOM Copilot            'TD consumers above 50000 over 180 days'",
-        ]:
+        # Built from AGENTS rather than written out, so a renamed agent cannot
+        # leave this list pointing at a name that no longer exists.
+        cases = {
+            "payment": "DL-4471002",
+            "recovery": "CM-8890145   then DL-2245108",
+            "theft": "CM-5561093   then IN-7734021",
+            "survey": "CM-8890145",
+            "restoration": "CM-8890145",
+            "complaint": "CMP-33012, CMP-33018, CMP-33021",
+            "call": "CALL-77201",
+            "asset": "DT-4587      then DT-2210",
+            "forecast": "F-07-HDP",
+            "copilot": "'TD consumers above 50000 over 180 days'",
+        }
+        for line in [f"  {name:<30} {cases.get(key, '')}"
+                     for key, name, *_ in AGENTS]:
             print(line)
         print("\nEach pair is a case and its counter-case: the second is the one")
         print("a naive model gets wrong.")

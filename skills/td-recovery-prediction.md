@@ -1,5 +1,5 @@
 ---
-name: discom-td-recovery-priority
+name: td-recovery-prediction
 description: >
   Scores a temporarily disconnected consumer for recovery priority, combining
   dues, days since disconnection, payment history, meter and site status, and

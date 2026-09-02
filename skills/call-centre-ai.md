@@ -1,5 +1,5 @@
 ---
-name: discom-call-analysis
+name: call-centre-ai
 description: >
   Analyses a call-centre interaction transcript — consumer intent, whether it
   was resolved, what the agent should have done, abuse or fraud indicators, and

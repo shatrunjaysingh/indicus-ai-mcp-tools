@@ -1,5 +1,5 @@
 ---
-name: discom-theft-detection
+name: theft-anomaly-detection
 description: >
   Analyses metering and billing data for signs of theft, tampering or
   unauthorised use, and produces an anomaly risk score with the evidence that

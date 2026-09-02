@@ -1,5 +1,5 @@
 ---
-name: discom-payment-risk
+name: revenue-collection-ai
 description: >
   Assesses one consumer's likelihood of paying, and recommends the next step on
   the recovery ladder — reminder, call, field visit, notice, or disconnection.

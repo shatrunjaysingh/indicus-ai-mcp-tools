@@ -1,5 +1,5 @@
 ---
-name: discom-site-survey
+name: ai-site-survey
 description: >
   Turns a field site survey — image analysis detections, OCR of the meter
   number, and the surveyor's observations — into a verified survey record, and

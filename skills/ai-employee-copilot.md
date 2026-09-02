@@ -1,5 +1,5 @@
 ---
-name: discom-copilot
+name: ai-employee-copilot
 description: >
   Answers a DISCOM employee's operational question from the data — consumer and
   arrear queries, division and circle comparisons, why a metric moved, and
