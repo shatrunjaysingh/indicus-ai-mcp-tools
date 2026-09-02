@@ -65,6 +65,13 @@ build both demos' agents and pipelines in the UI:
 repository — that side of it is all IndicusAI, and this repository only
 supplies the endpoints.
 
+## Testing the DISCOM agents
+
+[docs/discom-agent-tests.md](docs/discom-agent-tests.md) walks all ten through
+the browser, one input at a time, with what a correct answer contains and the
+wrong answer each case is designed to catch. Every case has a counter-case —
+the second is the one a plausible-sounding model gets wrong.
+
 ## Seeding a demo
 
 `seeds/` builds the workspace, skills, agents and pipeline in the platform.
