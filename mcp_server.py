@@ -37,7 +37,7 @@ from fastapi.routing import APIRoute
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
-from services import iam_api, payer_api, soc_api, utility_api
+from services import discom_api, iam_api, payer_api, soc_api, utility_api
 
 # mount path -> the FastAPI app serving it.
 SERVICES: dict[str, FastAPI] = {
@@ -45,6 +45,7 @@ SERVICES: dict[str, FastAPI] = {
     "utility": utility_api.app,
     "payer": payer_api.app,
     "iam": iam_api.app,
+    "discom": discom_api.app,
 }
 
 mcp: MCPServer = MCPServer(
