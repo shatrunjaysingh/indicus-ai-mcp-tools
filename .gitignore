@@ -11,3 +11,4 @@ output/
 *.pdf
 *.log
 services/_portfolio_cache.json
+services/_exports/

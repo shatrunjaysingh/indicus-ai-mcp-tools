@@ -15,7 +15,12 @@ from __future__ import annotations
 
 import discom_data as data
 import discom_portfolio as portfolio
+import csv
+from datetime import UTC, datetime
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 app = FastAPI(
     title="DISCOM systems (demo)",
@@ -720,6 +725,100 @@ def list_early_warning(limit: int = 20, min_risk: float = 0.5,
             for a in rows[: max(1, min(limit, 100))]
         ],
     }
+
+
+@app.get("/portfolio/export", operation_id="exportDefaulterList",
+         summary="Write the matching accounts to a CSV file and return its link")
+def export_list(segment: str | None = None, min_chronic_risk: float = 0,
+                min_outstanding: float = 0, min_probability: float = 0,
+                division: str | None = None,
+                dc_eligible_only: bool = False) -> dict:
+    """Export the full matching list to CSV, and return where it is.
+
+    **The rows do not come back through this call.** A list of fifty thousand
+    accounts costs nothing to write to a file and a great deal to pass through
+    a language model — tens of lakhs of tokens, most of a context window, and a
+    reply nobody can read. The file is written by this service; what comes back
+    is the row count, the columns, the link, and five rows so the caller can
+    see the shape.
+
+    Scans the whole book rather than the materialised pools, so an export is
+    complete rather than the top slice of a ranking.
+    """
+    exports = Path(__file__).resolve().parent / "_exports"
+    exports.mkdir(exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    name = f"defaulters-{stamp}.csv"
+    path = exports / name
+
+    columns = [
+        "consumer_no", "division", "category", "segment", "outstanding",
+        "payment_probability", "expected_recovery", "chronic_risk",
+        "unpaid_cycles", "days_since_last_payment", "on_time_ratio",
+        "notices_ignored", "broken_promises", "has_open_dispute",
+        "dc_eligible", "dc_blocked_by",
+    ]
+
+    rows = 0
+    total_due = 0.0
+    total_expected = 0.0
+    preview: list[dict] = []
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        for a in portfolio.stream_book():
+            if segment and a.segment != segment:
+                continue
+            if a.chronic_risk < min_chronic_risk:
+                continue
+            if a.outstanding < min_outstanding:
+                continue
+            if a.payment_probability < min_probability:
+                continue
+            if division and a.division != division:
+                continue
+            if dc_eligible_only and not a.dc_eligible:
+                continue
+            record = {c: getattr(a, c) for c in columns}
+            writer.writerow(record)
+            rows += 1
+            total_due += a.outstanding
+            total_expected += a.expected_recovery
+            if len(preview) < 5:
+                preview.append(record)
+
+    return {
+        "rows": rows,
+        "file": name,
+        "download_url": f"/discom/exports/{name}",
+        "size_kb": round(path.stat().st_size / 1024, 1),
+        "columns": columns,
+        "filters_applied": {
+            "segment": segment or "all",
+            "min_chronic_risk": min_chronic_risk,
+            "min_outstanding": min_outstanding,
+            "min_probability": min_probability,
+            "division": division or "all",
+            "dc_eligible_only": dc_eligible_only,
+        },
+        "total_outstanding": round(total_due, 2),
+        "total_expected_recovery": round(total_expected, 2),
+        "preview": preview,
+        "note": ("Full list written to the file. Open it in Excel or import it "
+                 "to the field system; do not ask for the rows in chat."),
+    }
+
+
+@app.get("/exports/{name}", include_in_schema=False)
+def download_export(name: str) -> FileResponse:
+    """Serve a written export. Not a tool — a browser link."""
+    # Name comes from a URL, so it is not trusted to be a bare filename.
+    if "/" in name or "\\" in name or name.startswith("."):
+        raise HTTPException(400, "Bad export name.")
+    path = Path(__file__).resolve().parent / "_exports" / name
+    if not path.is_file():
+        raise HTTPException(404, f"No export {name}.")
+    return FileResponse(path, media_type="text/csv", filename=name)
 
 
 @app.get("/portfolio/channels", operation_id="getRecoveryChannels",

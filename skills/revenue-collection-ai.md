@@ -9,6 +9,7 @@ description: >
 allowed-tools:
   - getCollectionPortfolio
   - buildCampaignList
+  - exportDefaulterList
   - listEarlyWarning
   - listCollectionTargets
   - getConsumerScore
@@ -74,6 +75,22 @@ the same population into a costed campaign with its expected recovery.
 Name the accounts you show. A table of consumer numbers with the risk, the
 balance and what drives each one is the deliverable; the surrounding analysis
 explains it.
+
+### Handing over the list
+
+When the answer is a list somebody will work — a campaign, an early-warning
+population, a disconnection drive — use `exportDefaulterList` and give the
+download link, the row count and the totals.
+
+**Never put the rows in your reply.** Fifty thousand accounts is about two
+million tokens: it does not fit in the context, and if it did it would cost
+several dollars to say something nobody can read. The file costs nothing. Show
+the five sample rows the tool returns so the reader can see the shape, and
+point at the file for the rest.
+
+Say what the file contains and what the filters were, so the person opening it
+in Excel knows what they are holding. An export whose selection nobody can
+reconstruct is not evidence of anything.
 
 ### Disconnection is not a ranking
 

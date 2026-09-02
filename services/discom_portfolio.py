@@ -463,3 +463,47 @@ FORECAST_HISTORY: list[dict] = [
     {"month": "2026-07", "forecast": 23_000_000, "actual": 21_050_000},
     {"month": "2026-08", "forecast": 22_800_000, "actual": 20_400_000},
 ]
+
+
+def stream_book():
+    """Regenerate the whole book, yielding one account at a time.
+
+    For exports that must cover all ten lakh rather than the materialised
+    pools. Deterministic and identical to what `_generate` produced, so an
+    exported row and a scored row agree.
+    """
+    rng = random.Random(SEED)
+    cats = list(_MIX)
+    weights = [_MIX[c]["share"] for c in cats]
+    for i in range(POPULATION):
+        cat = rng.choices(cats, weights=weights)[0]
+        mix = _MIX[cat]
+        due = max(500.0, rng.gauss(mix["mean_due"], mix["sd"]))
+        on_time = min(1.0, max(0.0, rng.betavariate(3.4, 1.5)))
+        unpaid = rng.choices([1, 2, 3, 4, 5, 6, 8, 10, 14],
+                             weights=[22, 18, 14, 11, 9, 8, 7, 6, 5])[0]
+        age = rng.choices([4, 9, 18, 40, 90, 160],
+                          weights=[3, 4, 14, 30, 30, 19])[0]
+        notices = rng.choices([0, 1, 2, 3, 4], weights=[38, 27, 18, 11, 6])[0]
+        broken = rng.choices([0, 1, 2], weights=[82, 14, 4])[0]
+        vacated = rng.random() < 0.055
+        division = rng.choices(DIVISIONS, weights=[0.42, 0.33, 0.25])[0]
+        acc = Account(
+            consumer_no=f"{'DL' if cat.startswith('LT-1') else 'CM' if cat.startswith('LT-2') else 'IN' if cat.startswith('HT') else 'AG'}-{700000 + i}",
+            division=division, category=cat, outstanding=round(due, 2),
+            unpaid_cycles=unpaid,
+            days_since_last_payment=min(900, unpaid * 30 + rng.randint(0, 45)),
+            on_time_ratio=round(on_time, 3), notices_ignored=notices,
+            broken_promises=broken, connection_age_months=age,
+            has_open_dispute=rng.random() < 0.043,
+            consumption_last_period=0 if vacated else rng.randint(40, 900),
+            notice_served=notices > 0 or unpaid >= 4,
+            notice_expired=notices > 0 and unpaid >= 5,
+            billed_on_actual_reads=rng.random() > 0.07,
+        )
+        acc.segment = _segment_for(acc)
+        acc.payment_probability, acc.features = _score(acc)
+        acc.expected_recovery = round(acc.outstanding * acc.payment_probability, 2)
+        acc.chronic_risk = _chronic_risk(acc)
+        acc.dc_eligible, acc.dc_blocked_by = _disconnection_eligibility(acc)
+        yield acc

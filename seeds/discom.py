@@ -184,6 +184,21 @@ TOOLS = [
           "min_chronic_risk": "0-1; use to build a campaign against the "
                               "early-warning population",
           "division": "e.g. Pune East"}),
+    _get("exportDefaulterList",
+         "Writes every matching account to a CSV and returns the row count, "
+         "the totals, the columns, a download link and five sample rows. The "
+         "rows themselves do not come back — a fifty-thousand-row list costs "
+         "nothing to write to a file and about six dollars to pass through a "
+         "model, where it would not fit anyway. Scans the whole book, so the "
+         "export is complete rather than the top of a ranking. Takes about "
+         "thirty seconds.",
+         "/portfolio/export", None,
+         {"segment": "e.g. recent_deterioration",
+          "min_chronic_risk": "0-1",
+          "min_outstanding": "rupees, inclusive",
+          "min_probability": "0-1",
+          "division": "e.g. Pune East",
+          "dc_eligible_only": "true | false"}),
     _get("listEarlyWarning",
          "Accounts most likely to become chronic defaulters, ranked on chronic "
          "risk rather than payment probability. Accounts already chronic score "
@@ -213,7 +228,8 @@ TOOL_NAMES = {t["name"] for t in TOOLS}
 AGENTS = [
     (
         "payment", "Revenue & Collection AI", "deep", "revenue-collection-ai",
-        ["getCollectionPortfolio", "buildCampaignList", "listEarlyWarning",
+        ["getCollectionPortfolio", "buildCampaignList", "exportDefaulterList",
+         "listEarlyWarning",
          "listCollectionTargets", "getConsumerScore",
          "getRecoveryChannels", "getCampaignHistory", "getCollectionForecast",
          "getConsumer", "getBillingHistory", "getPaymentHistory",
