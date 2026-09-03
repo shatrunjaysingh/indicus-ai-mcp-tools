@@ -16,11 +16,18 @@ from __future__ import annotations
 import discom_data as data
 import discom_portfolio as portfolio
 import csv
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+
+# Where this deployment is reachable from a browser, so an export link can be
+# handed to someone rather than being a path they have to assemble. Caddy routes
+# /discom/exports/* to this service; see deploy/caddy/Caddyfile in the platform
+# repository.
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8304").rstrip("/")
 
 app = FastAPI(
     title="DISCOM systems (demo)",
@@ -790,7 +797,7 @@ def export_list(segment: str | None = None, min_chronic_risk: float = 0,
     return {
         "rows": rows,
         "file": name,
-        "download_url": f"/discom/exports/{name}",
+        "download_url": f"{PUBLIC_BASE_URL}/discom/exports/{name}",
         "size_kb": round(path.stat().st_size / 1024, 1),
         "columns": columns,
         "filters_applied": {
