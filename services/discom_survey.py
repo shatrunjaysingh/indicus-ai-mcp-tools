@@ -84,13 +84,22 @@ class Survey:
     needs_human: bool = False
 
 
-def _corrupt(number: str, rng: random.Random) -> str:
-    """Introduce one predictable OCR confusion."""
-    frm, to = rng.choice(OCR_CONFUSIONS)
-    if frm in number:
-        i = number.rindex(frm)
-        return number[:i] + to + number[i + 1:]
-    return number[:-1] + to
+def _corrupt(number: str, rng: random.Random) -> str | None:
+    """Introduce one real OCR confusion, or none if the number has no candidate.
+
+    Only substitutes characters that are actually confusable. The first version
+    fell back to replacing the last character with whatever it had drawn, which
+    manufactured substitutions like 8 to O — not a confusion any reader makes,
+    and classified downstream as a genuine meter mismatch. That inflated the
+    "the meter may not be the one billed" count with fixture noise, which is
+    the one number in this queue nobody should have to doubt.
+    """
+    candidates = [(f, t) for f, t in OCR_CONFUSIONS if f in number]
+    if not candidates:
+        return None
+    frm, to = rng.choice(candidates)
+    i = number.rindex(frm)
+    return number[:i] + to + number[i + 1:]
 
 
 def _review(s: Survey) -> None:
@@ -197,7 +206,7 @@ def _generate() -> tuple[list[Survey], dict]:
         if swapped:
             read_meter = f"MT-{rng.randint(10_000_000, 99_999_999)}"
         elif misread:
-            read_meter = _corrupt(real_meter, rng)
+            read_meter = _corrupt(real_meter, rng) or real_meter
         else:
             read_meter = real_meter
 
@@ -274,7 +283,7 @@ def _generate() -> tuple[list[Survey], dict]:
 
 
 def _load() -> tuple[list[Survey], dict]:
-    key = f"{SEED}-{POPULATION}-v3"
+    key = f"{SEED}-{POPULATION}-v4"
     cache = Path(__file__).resolve().parent / "_survey_cache.json"
     if cache.exists():
         try:
