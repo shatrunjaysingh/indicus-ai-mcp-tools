@@ -776,9 +776,14 @@ def _declared_tools(skill: str) -> list[str]:
     """Every tool the manifest must declare for this skill to publish.
 
     The platform rejects a bundle whose skill requests a tool the manifest does
-    not permit. Built from the connector list unioned with whatever the skill's
-    own frontmatter declares, so a skill naming something outside the list
-    cannot fail validation with a message about the manifest.
+    not permit, so this is exactly what the skill's own frontmatter declares.
+
+    It used to union that with every registered connector, which made the
+    manifest permit all seventy-five tools for every skill — a permission that
+    grants everything is not a permission, and it hid exactly the mismatch the
+    check exists to catch. The union was working around a different bug: the
+    manifest had been built from the connector list alone, so a skill declaring
+    anything else failed. Declaring what the skill asks for fixes both.
     """
     declared: list[str] = []
     inside = False
@@ -792,7 +797,10 @@ def _declared_tools(skill: str) -> list[str]:
                 continue
             if line and not line.startswith(" "):
                 break
-    return sorted(set(TOOL_NAMES) | set(declared))
+    # A skill declaring nothing gets nothing, which is correct: it calls no
+    # tools. Silently granting it the whole connector list would be the same
+    # mistake in a quieter form.
+    return sorted(set(declared))
 
 
 async def main() -> None:
@@ -899,7 +907,16 @@ async def main() -> None:
                                    if v["version"] == prior["latest_version"]), None)
                     shipped = {s["name"]: s.get("body")
                                for s in (latest or {}).get("skills", [])}
-                    if (shipped.get(slug) or "").strip() == _body_only(text):
+                    # The manifest is compared as well as the body. Comparing
+                    # only the body meant a permission change could never ship:
+                    # the tools a skill is allowed to call would be corrected
+                    # here and the seed would report "unchanged" and publish
+                    # nothing.
+                    live_tools = set(
+                        ((latest or {}).get("manifest") or {})
+                        .get("permissions", {}).get("tools") or [])
+                    same_body = (shipped.get(slug) or "").strip() == _body_only(text)
+                    if same_body and live_tools == set(_declared_tools(text)):
                         plugin_ids[slug] = prior["id"]
                         print(f"   {slug:<34} unchanged at {prior['latest_version']}")
                         continue
