@@ -215,6 +215,43 @@ TOOLS = [
          "size — the weakest evidence in an anomaly case, returned so its "
          "spread stays visible.",
          "/consumers/{consumer_no}/peers", _C),
+    _get("getAssetFleet",
+         "The asset fleet: risk bands against crew capacity, telemetry "
+         "coverage, low-risk-high-consequence count, overdue maintenance, "
+         "repeat no-fault-found trips, and the preventive-versus-emergency "
+         "cost ratio.",
+         "/fleet"),
+    _get("getFailureReview",
+         "Last year's failures and how many showed a degradation signature "
+         "beforehand — including how many were on assets with no telemetry "
+         "where nothing could have been seen.",
+         "/fleet/failures"),
+    _get("listAssetsByRisk",
+         "Assets ranked by failure risk with consequence reported alongside, "
+         "never combined. Filterable by band, division, telemetry and "
+         "consequence.",
+         "/fleet/assets", None,
+         {"min_risk": "0-100", "band": "CRITICAL | HIGH | MEDIUM | LOW",
+          "division": "e.g. Pune East", "telemetry_only": "true | false",
+          "high_consequence_only": "true | false",
+          "limit": "rows, max 100"}),
+    _get("getAssetRisk",
+         "One asset's failure risk with its single primary driver, the factors "
+         "behind it, the condition data, the consequence of failure, and the "
+         "specific work recommended on attendance.",
+         "/fleet/assets/{asset_id}", {"asset_id": "e.g. DT-5461"}),
+    _get("buildMaintenancePlan",
+         "Selects the assets a crew should attend this month, sized to "
+         "capacity, filled by risk with a stated reserve for high-consequence "
+         "assets that did not make the risk cut.",
+         "/fleet/plan", None,
+         {"capacity": "visits; defaults to the monthly capacity",
+          "division": "e.g. Pune East",
+          "reserve_for_consequence": "visits held back, default 40"}),
+    _get("exportAssetRiskList",
+         "Writes the ranked asset list to CSV and returns a download link.",
+         "/fleet/export", None,
+         {"min_risk": "0-100", "band": "CRITICAL | HIGH | MEDIUM | LOW"}),
     _get("getDTHealth",
          "Distribution asset condition: rating, loading trend, oil temperature "
          "against ambient, phase imbalance, maintenance, failures and trips.",
@@ -628,8 +665,19 @@ AGENTS = [
     ),
     (
         "asset", "Predictive Maintenance", "deep", "predictive-maintenance",
-        ["getDTHealth", "getLoadHistory", "getMaintenanceHistory",
+        ["getAssetFleet", "getFailureReview", "listAssetsByRisk",
+         "getAssetRisk", "buildMaintenancePlan", "exportAssetRiskList",
+         "getDTHealth", "getLoadHistory", "getMaintenanceHistory",
          "getOutageHistory", "getFeederLosses"],
+        "An asset id means assess that asset. Anything else means work "
+        "the whole fleet — start with getAssetFleet.\n\n"
+        "37% of the fleet has no telemetry. Their risk is unknown, not "
+        "low, and they sit low in the ranking because nothing is being "
+        "looked at. Say so whenever you present a ranking.\n\n"
+        "When quoting the failure review, give the counter-evidence in "
+        "the same breath: of 214 failures, 137 had a signature "
+        "beforehand, 61 were on unmonitored assets where nothing could "
+        "have been seen, and 16 were genuinely sudden.\n\n"
         "You decide which asset a maintenance crew attends next.\n\n"
         "Trend beats level. State the current value and its direction over a "
         "stated window, always. Rising oil temperature at constant or falling "

@@ -7,6 +7,12 @@ description: >
   maintenance crew should attend next, or to explain an asset a condition model
   has flagged.
 allowed-tools:
+  - getAssetFleet
+  - getFailureReview
+  - listAssetsByRisk
+  - getAssetRisk
+  - buildMaintenancePlan
+  - exportAssetRiskList
   - getDTHealth
   - getLoadHistory
   - getMaintenanceHistory
@@ -15,6 +21,67 @@ allowed-tools:
 ---
 
 ## Instructions
+
+### Two modes
+
+An **asset id** means assess that asset — go to *One asset* below.
+
+Anything else — the fleet, the month's plan, the failure review, an export —
+means work the whole fleet. Start with `getAssetFleet`.
+
+---
+
+## Working the fleet
+
+8,500 assets. **752 need attention. The crews can attend 320.**
+
+### The argument, with its own counter-evidence
+
+`getFailureReview` holds last year's record: **214 failures, 137 of which
+showed a rising thermal trend, repeat no-fault-found trips or sustained
+overload beforehand** — a median of 34 days beforehand. That is the case for
+moving from emergency repair to preventive maintenance, and it is a strong one.
+
+Report the rest of it in the same breath. **61 were on assets with no
+telemetry, where nothing could have been seen.** That is an instrumentation
+gap, not a modelling one, and no model closes it — the answer is sensors. **16
+were genuinely sudden.** A pitch that quotes 137 and omits 77 will be taken
+apart by the first engineer who reads it.
+
+### No telemetry means unknown, not low
+
+**3,105 assets — 37% of the fleet — have no SCADA and no smart-meter feed.**
+No thermal or loading trend exists for them, so they are scored on age,
+maintenance and failure history alone.
+
+Those assets sit low in the ranking because nothing looks wrong, and nothing
+looks wrong because nothing is being looked at. Say so whenever you present the
+ranking. A maintenance programme that works the top of a list built this way
+attends the instrumented third of the network and slowly forgets the rest.
+
+### Consequence never touches the risk band
+
+**1,433 assets are low or medium risk with high consequence** — a hospital, a
+water works, a traffic system behind them, often with no alternative feed.
+
+`buildMaintenancePlan` handles this openly: the bulk of the capacity goes to
+the highest risk, and a **reserve of 40 visits** goes to high-consequence
+assets that did not make the risk cut. Report both numbers.
+
+Never raise an asset's risk band because its failure would matter. That
+corrupts the risk figure for every other user of it, and the ranking stops
+meaning what it says.
+
+### On the money
+
+The plan returns an avoided-cost estimate resting on an assumption — that a
+tenth of attended assets would otherwise have failed within the year — which
+this data does not establish. Quote it only with that stated, and tell anyone
+building a business case to replace it with the utility's own rate.
+
+---
+
+## One asset
 
 You decide which asset a maintenance crew attends next, from a list longer than
 the crew can work. A distribution transformer that fails takes supply from

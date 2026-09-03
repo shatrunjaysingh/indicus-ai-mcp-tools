@@ -16,6 +16,7 @@ from __future__ import annotations
 import discom_data as data
 import discom_portfolio as portfolio
 import discom_td as td
+import discom_assets as assets
 import discom_calls as calls
 import discom_complaints as complaints
 import discom_survey as survey
@@ -2307,5 +2308,297 @@ def calls_export(conduct_flag: str | None = None,
         "columns": columns,
         "filters_applied": {"conduct_flag": conduct_flag or "all",
                             "unresolved_only": unresolved_only},
+        "preview": preview,
+    }
+
+
+# --- asset fleet -----------------------------------------------------------
+# Use case 8. Mounted at /fleet; /assets/{asset_id} already exists above.
+
+@app.get("/fleet", operation_id="getAssetFleet",
+         summary="The asset fleet: risk bands, telemetry coverage, capacity gap")
+def asset_fleet() -> dict:
+    """The whole fleet, scored.
+
+    `no_telemetry` is the number to read carefully. Those assets have no SCADA
+    and no smart-meter feed, so no thermal or loading trend can be computed for
+    them at all. Their risk is **unknown**, not low, and a ranking that quietly
+    sorts them to the bottom because nothing looks wrong is how the unmonitored
+    part of a network becomes invisible.
+    """
+    t = assets.TOTALS
+    needing = t["by_band"]["CRITICAL"] + t["by_band"]["HIGH"]
+    return {
+        "assets": t["assets"],
+        "by_type": t["by_type"],
+        "risk_bands": t["by_band"],
+        "band_meaning": {
+            "CRITICAL": "70-100: inspect within 7 days",
+            "HIGH": "45-69: inspect within 30 days",
+            "MEDIUM": "22-44: inspect within 90 days",
+            "LOW": "0-21: routine cycle",
+        },
+        "needing_attention": needing,
+        "crew_capacity_per_month": t["crew_capacity"],
+        "capacity_gap": needing - t["crew_capacity"],
+        "telemetry": {
+            "instrumented": t["assets"] - t["no_telemetry"],
+            "no_telemetry": t["no_telemetry"],
+            "note": ("No telemetry means no thermal or loading trend. Risk for "
+                     "these is unknown rather than low, and they are scored on "
+                     "age, maintenance and failure history alone."),
+        },
+        "low_risk_high_consequence": t["low_risk_high_consequence"],
+        "low_risk_high_consequence_note": (
+            "Assets unlikely to fail whose failure would matter a great deal — "
+            "a hospital or water works behind them, no alternative feed. They "
+            "may warrant attention ahead of higher-risk assets. That is a "
+            "ranking decision and must never be made by inflating the risk "
+            "band, which would corrupt the risk figure for every other user."),
+        "overdue_maintenance": t["overdue_maintenance"],
+        "repeat_no_fault_found": t["repeat_no_fault_found"],
+        "repeat_no_fault_found_note": (
+            "Assets tripped twice or more in 90 days and restored with no "
+            "fault found. That is not a clean record — it is the signature of "
+            "an intermittent developing fault."),
+        "economics": {
+            "preventive_visit_cost": assets.PREVENTIVE_COST,
+            "emergency_repair_cost": assets.EMERGENCY_REPAIR_COST,
+            "ratio": round(assets.EMERGENCY_REPAIR_COST / assets.PREVENTIVE_COST, 1),
+        },
+    }
+
+
+@app.get("/fleet/failures", operation_id="getFailureReview",
+         summary="Last year's failures, and how many were foreseeable")
+def failure_review() -> dict:
+    """What actually failed, and whether the signature was there beforehand.
+
+    This is the client's argument with evidence behind it, including the part
+    that is not a win: a third of the failures were on assets with no
+    telemetry, where nothing could have been seen. That is an instrumentation
+    gap, not a modelling one, and no model closes it.
+    """
+    return assets.FAILURE_REVIEW
+
+
+@app.get("/fleet/assets", operation_id="listAssetsByRisk",
+         summary="Assets ranked by failure risk, with consequence alongside")
+def list_assets_by_risk(min_risk: int = 0, band: str | None = None,
+                        division: str | None = None,
+                        telemetry_only: bool = False,
+                        high_consequence_only: bool = False,
+                        limit: int = 20) -> dict:
+    """The ranked fleet. Risk and consequence are returned side by side and
+    never combined into one number here."""
+    rows = [
+        a for a in assets.RANKED
+        if a.failure_risk >= min_risk
+        and (band is None or a.risk_band == band)
+        and (division is None or a.division == division)
+        and (not telemetry_only or a.telemetry)
+        and (not high_consequence_only or a.consequence_score >= 70)
+    ]
+    shown = rows[: max(1, min(limit, 100))]
+    return {
+        "matched": len(rows),
+        "filters_applied": {
+            "min_risk": min_risk, "band": band or "all",
+            "division": division or "all",
+            "telemetry_only": telemetry_only,
+            "high_consequence_only": high_consequence_only,
+            "ranked_by": "failure_risk — consequence is reported, not ranked on",
+        },
+        "assets": [
+            {"asset_id": a.asset_id, "asset_type": a.asset_type,
+             "division": a.division, "subdivision": a.subdivision,
+             "rating_kva": a.rating_kva,
+             "failure_risk": a.failure_risk, "risk_band": a.risk_band,
+             "primary_driver": a.primary_driver,
+             "risk_known": a.risk_known,
+             "consequence_score": a.consequence_score,
+             "consumers_served": a.consumers_served,
+             "critical_loads": a.critical_loads,
+             "alternative_feed": a.alternative_feed,
+             "inspect_within_days": a.inspect_within_days,
+             "peak_load_pct": a.peak_load_pct,
+             "oil_temp_trend_6m": a.oil_temp_trend_6m,
+             "no_fault_found_trips_90d": a.no_fault_found_trips_90d}
+            for a in shown
+        ],
+    }
+
+
+@app.get("/fleet/assets/{asset_id}", operation_id="getAssetRisk",
+         summary="One asset's failure risk, its driver, and the work to do")
+def asset_risk(asset_id: str) -> dict:
+    """One asset, with the factors that produced the score.
+
+    `primary_driver` is a single named condition rather than "multiple
+    factors". A planner triaging fifty of these reads that field first, and a
+    report whose driver is a list has not done the work.
+    """
+    a = assets.BY_ID.get(asset_id.upper())
+    if a is None:
+        raise HTTPException(
+            404, f"No asset {asset_id} in the ranked fleet.")
+    work = []
+    if "thermal_trend" in a.factors:
+        work += ["oil sample for dissolved gas analysis", "thermographic scan"]
+    if "phase_imbalance" in a.factors:
+        work.append("rebalance phases")
+    if "sustained_overload" in a.factors or "high_loading" in a.factors:
+        work.append("load transfer or uprating assessment")
+    if "repeat_no_fault_found" in a.factors:
+        work.append("protection coordination check and cable termination inspection")
+    if not work:
+        work.append("routine inspection at the next cycle")
+    return {
+        "asset_id": a.asset_id, "asset_type": a.asset_type,
+        "division": a.division, "subdivision": a.subdivision,
+        "rating_kva": a.rating_kva, "installed_year": a.installed_year,
+        "failure_risk": a.failure_risk, "risk_band": a.risk_band,
+        "primary_driver": a.primary_driver,
+        "inspect_within_days": a.inspect_within_days,
+        "risk_factors": a.factors,
+        "risk_known": a.risk_known,
+        "telemetry": a.telemetry,
+        "telemetry_note": (
+            None if a.telemetry else
+            "No SCADA or smart-meter feed. No thermal or loading trend exists "
+            "for this asset, so this score is built from age, maintenance and "
+            "failure history alone. Treat it as unknown, not low."),
+        "condition": {
+            "peak_load_pct": a.peak_load_pct,
+            "load_trend_6m_pts": a.load_trend_6m,
+            "oil_temp_c": a.oil_temp_c, "ambient_c": a.ambient_c,
+            "oil_temp_trend_6m": a.oil_temp_trend_6m,
+            "phase_imbalance_pct": a.phase_imbalance_pct,
+            "months_since_maintenance": a.months_since_maintenance,
+            "maintenance_cycle_months": a.maintenance_cycle_months,
+            "failures_3y": a.failures_3y,
+            "trips_90d": a.trips_90d,
+            "no_fault_found_trips_90d": a.no_fault_found_trips_90d,
+        },
+        "consequence": {
+            "score": a.consequence_score,
+            "consumers_served": a.consumers_served,
+            "critical_loads": a.critical_loads,
+            "alternative_feed": a.alternative_feed,
+            "note": ("Kept separate from risk. Consequence may justify "
+                     "attending this asset earlier; it must never be used to "
+                     "raise the risk band."),
+        },
+        "recommended_work": work,
+    }
+
+
+@app.get("/fleet/plan", operation_id="buildMaintenancePlan",
+         summary="Select the assets a maintenance crew should attend this month")
+def maintenance_plan(capacity: int = 0, division: str | None = None,
+                     reserve_for_consequence: int = 40) -> dict:
+    """The month's work list, sized to crew capacity.
+
+    Filled in two passes, deliberately. The bulk goes to the highest failure
+    risk. A reserve goes to high-consequence assets that did not make the risk
+    cut — a hospital or water works with no alternative feed behind an asset
+    unlikely to fail. That reserve is a stated ranking decision with a number
+    on it, rather than a quiet inflation of those assets' risk band.
+    """
+    cap = capacity if capacity > 0 else assets.CREW_CAPACITY_PER_MONTH
+    if cap > assets.CREW_CAPACITY_PER_MONTH:
+        raise HTTPException(
+            400,
+            f"Crew capacity is {assets.CREW_CAPACITY_PER_MONTH} visits per "
+            f"month; {cap} was requested.")
+    pool = [a for a in assets.RANKED
+            if division is None or a.division == division]
+    reserve = max(0, min(reserve_for_consequence, cap // 2))
+    by_risk = [a for a in pool][: cap - reserve]
+    chosen = {a.asset_id for a in by_risk}
+    by_consequence = [
+        a for a in pool
+        if a.asset_id not in chosen and a.consequence_score >= 70
+    ][:reserve]
+
+    selected = by_risk + by_consequence
+    from collections import Counter
+    return {
+        "fleet": assets.TOTALS["assets"],
+        "selected": len(selected),
+        "capacity_used": f"{len(selected)} of {assets.CREW_CAPACITY_PER_MONTH}",
+        "selected_by_risk": len(by_risk),
+        "selected_by_consequence_reserve": len(by_consequence),
+        "reserve_rationale": (
+            "Assets unlikely to fail whose failure would matter a great deal. "
+            "Attending them is a ranking decision stated as one, not a risk "
+            "score adjusted to force the outcome."),
+        "risk_range": (f"{by_risk[-1].failure_risk}-{by_risk[0].failure_risk}"
+                       if by_risk else "none"),
+        "cost": round(len(selected) * assets.PREVENTIVE_COST, 2),
+        "failures_avoided_if_signature_holds": round(
+            len(selected) * (assets.FAILURE_REVIEW["with_degradation_signature_beforehand"]
+                             / assets.FAILURE_REVIEW["failures"]) * 0.1, 1),
+        "emergency_cost_avoided_estimate": round(
+            len(selected) * 0.1 * assets.EMERGENCY_REPAIR_COST, 2),
+        "estimate_caveat": (
+            "The avoided-failure figure assumes a tenth of attended assets "
+            "would otherwise have failed within the year. That rate is not "
+            "established by this fixture and should be replaced with the "
+            "utility's own before anyone quotes it."),
+        "driver_mix": dict(Counter(a.primary_driver for a in selected).most_common()),
+        "without_telemetry": sum(1 for a in selected if not a.telemetry),
+        "sample": [
+            {"asset_id": a.asset_id, "failure_risk": a.failure_risk,
+             "risk_band": a.risk_band, "primary_driver": a.primary_driver,
+             "consequence_score": a.consequence_score,
+             "critical_loads": a.critical_loads,
+             "inspect_within_days": a.inspect_within_days}
+            for a in selected[:10]
+        ],
+    }
+
+
+@app.get("/fleet/export", operation_id="exportAssetRiskList",
+         summary="Write the ranked asset list to CSV and return its link")
+def fleet_export(min_risk: int = 0, band: str | None = None) -> dict:
+    """Export the ranked fleet. The rows do not come back through this call."""
+    exports = Path(__file__).resolve().parent / "_exports"
+    exports.mkdir(exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    name = f"asset-risk-{stamp}.csv"
+    path = exports / name
+    columns = ["asset_id", "asset_type", "division", "subdivision",
+               "rating_kva", "installed_year", "failure_risk", "risk_band",
+               "primary_driver", "risk_known", "telemetry", "peak_load_pct",
+               "load_trend_6m", "oil_temp_c", "oil_temp_trend_6m",
+               "phase_imbalance_pct", "months_since_maintenance",
+               "failures_3y", "trips_90d", "no_fault_found_trips_90d",
+               "consumers_served", "alternative_feed", "consequence_score",
+               "inspect_within_days"]
+    rows = 0
+    preview: list[dict] = []
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=[*columns, "critical_loads"])
+        writer.writeheader()
+        for a in assets.RANKED:
+            if a.failure_risk < min_risk:
+                continue
+            if band and a.risk_band != band:
+                continue
+            record = {k: getattr(a, k) for k in columns}
+            record["critical_loads"] = "; ".join(a.critical_loads)
+            writer.writerow(record)
+            rows += 1
+            if len(preview) < 5:
+                preview.append(record)
+    return {
+        "rows": rows, "file": name,
+        "download_url": f"{PUBLIC_BASE_URL}/discom/exports/{name}",
+        "size_kb": round(path.stat().st_size / 1024, 1),
+        "columns": [*columns, "critical_loads"],
+        "filters_applied": {"min_risk": min_risk, "band": band or "all"},
+        "note": ("Ranked fleet only — the top of the ranking, not every asset. "
+                 "Assets with no telemetry carry risk_known=false."),
         "preview": preview,
     }
