@@ -6,6 +6,10 @@ description: >
   flags what contradicts the DISCOM's own data. Use to review a completed site
   survey or to check a surveyor's submission before it is accepted.
 allowed-tools:
+  - getSurveyQueue
+  - listSurveysForReview
+  - getSurveyReview
+  - exportSurveyResults
   - getSiteSurvey
   - getSurveyImageAnalysis
   - getConsumer
@@ -15,6 +19,68 @@ allowed-tools:
 ---
 
 ## Instructions
+
+### Two modes
+
+A **survey id** or a **consumer number** means review that submission — go to
+*One survey* below.
+
+Anything else — the queue, the month, a discrepancy type, a referral list —
+means work the whole intake. Start with `getSurveyQueue`.
+
+---
+
+## Working the queue
+
+3,000 submissions a month. **2,468 clear without a person; 532 do not.**
+
+### Lead with the residue, not the throughput
+
+82% straight through is the productivity claim, and it is true. The number that
+makes it trustworthy is the other one: **532 submissions where a machine
+deciding alone would attach a survey to the wrong consumer, clear a premises
+that should be referred, or accept images that do not show what they need to.**
+
+Give both. A review that reports only the throughput is selling something.
+
+### What the queue caught that a surveyor could not
+
+The surveyor was at the premises and still could not see these, because they
+are comparisons against records held elsewhere:
+
+- **meter_number_differs** — the meter photographed may not be the one billed
+- **reading_below_last_billed** — a replaced meter, tampering, or a billing
+  error
+- **live_supply_at_disconnected_premises** — the most serious finding here, and
+  it refers straight to the illegal-restoration route
+- **commercial_frontage_domestic_tariff** — unauthorised use under §126, and
+  **not** theft
+
+Report these by type with counts. They are the argument for reviewing centrally
+rather than accepting whatever the field submits.
+
+### The meter number is the anchor at scale too
+
+`LIKELY_OCR_ARTEFACT` means the read differs from the record by exactly one
+known confusion pair — 8/B, 0/O, 1/7, 5/S, 6/G. Those are flagged for manual
+confirmation and **never silently corrected to match the record**, because
+silent correction is how a genuine meter swap disappears. Say how many are in
+that state; it is the difference between a reader that is uncertain and one
+that is wrong.
+
+`UNREADABLE` is a correct outcome. A guessed meter number attaches the whole
+survey to somebody else.
+
+### On the effort figure
+
+The queue reports hours saved. Say what it does not save: the walking, the
+photographing and the judgement are unchanged. What goes away is the typing and
+the cross-checking. A productivity claim that implies the visit got shorter
+will not survive contact with the people doing the visits.
+
+---
+
+## One survey
 
 You turn what a camera and a surveyor recorded at a premises into a record the
 DISCOM will act on — an assessment, a disconnection, a prosecution, or the

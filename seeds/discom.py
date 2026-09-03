@@ -119,6 +119,32 @@ TOOLS = [
          "Field surveyor's findings at the premises: occupancy, observations, "
          "whether supply appears live.",
          "/consumers/{consumer_no}/survey", _C),
+    _get("getSurveyQueue",
+         "The month's submitted surveys: status split, meter-number outcomes, "
+         "how many cleared without a person, discrepancies by type, referrals "
+         "raised, and the effort comparison.",
+         "/surveys/queue"),
+    _get("listSurveysForReview",
+         "Surveys needing a person, filterable by status, discrepancy type and "
+         "referral, so a reviewer works the exceptions rather than all three "
+         "thousand.",
+         "/surveys", None,
+         {"status": "VERIFIED | PARTIAL | UNUSABLE",
+          "discrepancy_type": "e.g. live_supply_at_disconnected_premises",
+          "referral": "ILLEGAL_RESTORATION | UNAUTHORISED_USE_126",
+          "needs_human": "true | false",
+          "limit": "rows to return, max 100"}),
+    _get("getSurveyReview",
+         "One survey with its detections grouped by confidence, the OCR read "
+         "against the record, what the images did not capture, and every "
+         "discrepancy found against the DISCOM's own data.",
+         "/surveys/{survey_id}", {"survey_id": "e.g. SRV-60000"}),
+    _get("exportSurveyResults",
+         "Writes the survey queue results to CSV and returns a download link. "
+         "The rows do not come back through the call.",
+         "/surveys/export/csv", None,
+         {"status": "VERIFIED | PARTIAL | UNUSABLE",
+          "needs_human": "true | false"}),
     _get("getSurveyImageAnalysis",
          "Image-analysis detections and OCR from survey photographs, each with "
          "a confidence, plus what the images did not capture.",
@@ -384,8 +410,22 @@ AGENTS = [
     ),
     (
         "survey", "AI Site Survey", "fast", "ai-site-survey",
-        ["getSiteSurvey", "getSurveyImageAnalysis", "getConsumer",
+        ["getSurveyQueue", "listSurveysForReview", "getSurveyReview",
+         "exportSurveyResults",
+         "getSiteSurvey", "getSurveyImageAnalysis", "getConsumer",
          "getMeterStatus", "getDisconnectionRecord", "getConsumptionHistory"],
+        "A survey id or consumer number means review that submission. "
+        "Anything else means work the whole queue — start with "
+        "getSurveyQueue.\n\n"
+        "At queue scale, give the throughput and the residue together: the "
+        "submissions that cleared without a person, and the ones where a "
+        "machine deciding alone would attach a survey to the wrong consumer "
+        "or clear a premises that should be referred.\n\n"
+        "Report what the queue caught that a surveyor at the premises could "
+        "not — meter numbers that differ from the record, readings below the "
+        "last billed read, live supply at a disconnected premises. Those are "
+        "comparisons against records held elsewhere, and they are the argument "
+        "for reviewing centrally.\n\n"
         "You review detections, not photographs. Every label from the image "
         "analysis is a claim with a confidence attached; never restate one as "
         "something you observed.\n\n"

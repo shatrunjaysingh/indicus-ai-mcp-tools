@@ -16,6 +16,7 @@ from __future__ import annotations
 import discom_data as data
 import discom_portfolio as portfolio
 import discom_td as td
+import discom_survey as survey
 import discom_theft as theft
 import csv
 import os
@@ -1367,4 +1368,181 @@ def screening_export(min_risk: int = 45, division: str | None = None,
         "preview": preview,
         "note": ("Full list in the file. Every row is a consumer to look at, "
                  "not a consumer who has stolen anything."),
+    }
+
+
+# --- site survey queue -----------------------------------------------------
+# Use case 4. The per-consumer survey tools above review one submission; these
+# run the month's queue and say what a reviewer must look at by hand.
+
+@app.get("/surveys/queue", operation_id="getSurveyQueue",
+         summary="The month's submitted surveys: outcomes, discrepancies, effort")
+def survey_queue() -> dict:
+    """What the queue produced, and what still needs a person.
+
+    `needs_human_review` is the number that matters for the productivity
+    argument, and the number that keeps it honest. Straight-through processing
+    is the benefit; the residue is the cases where a machine deciding on its
+    own would attach a survey to the wrong consumer or clear a premises that
+    should be referred.
+    """
+    t = survey.TOTALS
+    n = t["surveys"]
+    return {
+        "surveys": n,
+        "by_status": t["by_status"],
+        "status_meaning": {
+            "VERIFIED": "images sufficient, meter number matches, nothing disagrees",
+            "PARTIAL": "usable, but something is missing or disagrees with the record",
+            "UNUSABLE": "the images do not show what they need to show",
+        },
+        "meter_number_outcomes": t["meter_number"],
+        "meter_number_note": (
+            "LIKELY_OCR_ARTEFACT means the read differs from the record by one "
+            "known confusion pair — 8/B, 0/O, 1/7, 5/S, 6/G. It is flagged for "
+            "manual confirmation and never silently corrected to match, "
+            "because silent correction is how a genuine meter swap disappears."
+        ),
+        "needs_human_review": t["needs_human"],
+        "straight_through": n - t["needs_human"],
+        "straight_through_pct": round((n - t["needs_human"]) / n * 100, 1),
+        "discrepancies_by_type": t["discrepancy_counts"],
+        "referrals": t["referrals"],
+        "effort": {
+            "minutes_per_survey_manual": survey.MINUTES_MANUAL,
+            "minutes_per_survey_assisted": survey.MINUTES_ASSISTED,
+            "hours_manual": round(t["minutes_manual"] / 60, 1),
+            "hours_assisted": round(t["minutes_assisted"] / 60, 1),
+            "hours_saved": round(
+                (t["minutes_manual"] - t["minutes_assisted"]) / 60, 1),
+            "note": ("The residue is walking, photographing and judgement. "
+                     "This removes the typing and the cross-checking, not the "
+                     "visit."),
+        },
+        "caveat": (
+            "Detections come from a vision service and are claims with "
+            "confidences, not observations. Absence of a detection means the "
+            "thing was not detected in the images provided, which is not the "
+            "same as it not being there."
+        ),
+    }
+
+
+@app.get("/surveys", operation_id="listSurveysForReview",
+         summary="Surveys needing a person, filterable by what is wrong")
+def surveys_for_review(status: str | None = None,
+                       discrepancy_type: str | None = None,
+                       referral: str | None = None,
+                       needs_human: bool = True,
+                       limit: int = 20) -> dict:
+    """The review queue, so a reviewer works the exceptions rather than all
+    three thousand."""
+    rows = [
+        s for s in survey.SURVEYS
+        if (not needs_human or s.needs_human)
+        and (status is None or s.status == status)
+        and (discrepancy_type is None or discrepancy_type in s.discrepancy_types)
+        and (referral is None or s.referral == referral)
+    ]
+    shown = rows[: max(1, min(limit, 100))]
+    return {
+        "matched": len(rows),
+        "filters_applied": {
+            "status": status or "all",
+            "discrepancy_type": discrepancy_type or "all",
+            "referral": referral or "all",
+            "needs_human": needs_human,
+        },
+        "surveys": [
+            {"survey_id": s.survey_id, "consumer_no": s.consumer_no,
+             "division": s.division, "surveyor": s.surveyor,
+             "submitted": s.submitted, "status": s.status,
+             "meter_number_outcome": s.meter_number_outcome,
+             "discrepancies": s.discrepancies,
+             "referral": s.referral}
+            for s in shown
+        ],
+    }
+
+
+@app.get("/surveys/{survey_id}", operation_id="getSurveyReview",
+         summary="One survey: detections, OCR, and what disagrees with the record")
+def survey_review(survey_id: str) -> dict:
+    """Everything about one submission.
+
+    Detections are grouped by confidence so a low-confidence claim cannot be
+    read as a finding. `not_captured` is as important as anything detected: a
+    seal that was not photographed is not a missing seal, and only the first of
+    those supports an assessment.
+    """
+    s = survey.BY_ID.get(survey_id.upper())
+    if s is None:
+        raise HTTPException(404, f"No survey {survey_id}.")
+    strong = [d for d in s.detections if d["confidence"] >= 0.7]
+    weak = [d for d in s.detections if d["confidence"] < 0.7]
+    return {
+        "survey_id": s.survey_id, "consumer_no": s.consumer_no,
+        "division": s.division, "surveyor": s.surveyor,
+        "submitted": s.submitted, "images": s.images,
+        "status": s.status,
+        "meter_number": {
+            "read": s.ocr_meter_number,
+            "confidence": s.ocr_confidence,
+            "on_record": s.record_meter_number,
+            "outcome": s.meter_number_outcome,
+        },
+        "reading": {"photographed": s.ocr_reading,
+                    "last_billed": s.record_last_read},
+        "detections_confident": strong,
+        "detections_low_confidence": weak,
+        "low_confidence_note": (
+            "Below 0.7. Report these as what the analysis claimed, with the "
+            "confidence, and never merge them into a conclusion."),
+        "not_captured": s.not_captured,
+        "record": {"supply_status": s.record_supply_status,
+                   "tariff_category": s.record_tariff_category},
+        "discrepancies": s.discrepancies,
+        "discrepancy_types": s.discrepancy_types,
+        "referral": s.referral,
+        "needs_human_review": s.needs_human,
+    }
+
+
+@app.get("/surveys/export/csv", operation_id="exportSurveyResults",
+         summary="Write the survey queue results to CSV and return its link")
+def survey_export(status: str | None = None, needs_human: bool = False) -> dict:
+    """Export the queue. The rows do not come back through this call."""
+    exports = Path(__file__).resolve().parent / "_exports"
+    exports.mkdir(exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    name = f"survey-results-{stamp}.csv"
+    path = exports / name
+    columns = ["survey_id", "consumer_no", "division", "surveyor", "submitted",
+               "status", "ocr_meter_number", "ocr_confidence",
+               "record_meter_number", "meter_number_outcome", "ocr_reading",
+               "record_last_read", "referral", "needs_human"]
+    rows = 0
+    preview: list[dict] = []
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(
+            fh, fieldnames=[*columns, "discrepancies"])
+        writer.writeheader()
+        for s in survey.SURVEYS:
+            if status and s.status != status:
+                continue
+            if needs_human and not s.needs_human:
+                continue
+            record = {k: getattr(s, k) for k in columns}
+            record["discrepancies"] = "; ".join(s.discrepancies)
+            writer.writerow(record)
+            rows += 1
+            if len(preview) < 5:
+                preview.append(record)
+    return {
+        "rows": rows, "file": name,
+        "download_url": f"{PUBLIC_BASE_URL}/discom/exports/{name}",
+        "size_kb": round(path.stat().st_size / 1024, 1),
+        "columns": [*columns, "discrepancies"],
+        "filters_applied": {"status": status or "all", "needs_human": needs_human},
+        "preview": preview,
     }
