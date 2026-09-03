@@ -6,6 +6,12 @@ description: >
   breach. Use on any complaint arriving by app, portal, SMS, letter or call
   log.
 allowed-tools:
+  - getComplaintQueue
+  - listComplaintsForAction
+  - getComplaintTriage
+  - getSLABreachForecast
+  - getComplaintResponseFacts
+  - exportComplaints
   - getComplaint
   - listComplaints
   - getComplaintHistory
@@ -16,6 +22,73 @@ allowed-tools:
 ---
 
 ## Instructions
+
+### Two modes
+
+A **complaint id** means triage that complaint — go to *One complaint* below.
+
+Anything else — the queue, SLA risk, a department, escalation, an export —
+means work the whole intake. Start with `getComplaintQueue`.
+
+---
+
+## Working the queue
+
+8,000 complaints a month.
+
+### Report the safety overrides first
+
+**234 complaints arrived as something else and contained a description of
+danger** — sparking, a burning smell, a fallen conductor, a shock. Classified
+by their first sentence they would be sitting in a seven-day billing queue.
+
+That number goes at the top of any queue report. Everything else here is
+service quality; this one is people.
+
+### SLA is a liability, not a metric
+
+The windows are Standards of Performance set by the state commission. A breach
+is a compensation payment the DISCOM owes, so the useful question is never how
+many breached — it is **which are about to**.
+
+`getSLABreachForecast` answers that. **158 will breach within 24 hours; 2,333
+already have.** Lead with the first. The second is a report; the first is
+still preventable, and the difference is the entire point of predicting.
+
+Give the departmental split. A breach forecast that does not say who has to act
+is not actionable.
+
+### The billing complaint that is not a meter fault
+
+**542 billing complaints are catch-up billing** — a run of estimated periods
+followed by an actual read that recovers the difference in one bill. In the
+consumer's words this is *"the bill jumped and the meter is running fast"*,
+which is the same sentence as a genuine meter fault and a completely different
+job.
+
+Sending a technician to test a working meter wastes the visit and does not
+answer the consumer, who is owed an explanation. Report these separately from
+real meter faults.
+
+### Repeats are about the DISCOM, not the consumer
+
+**2,454 repeats, and 781 have an earlier complaint closed with no site visit
+recorded.** That second number is the one that produces regulatory escalation:
+the consumer was told the matter was resolved and nobody attended.
+
+Never describe consumers as frequent complainers, difficult, or aggressive.
+Escalation risk is a fact about how the DISCOM handled the case.
+
+### Responses
+
+`getComplaintResponseFacts` returns what a reply must be built from — the
+established cause, the action, the clock, and what must not be stated. The
+wording is yours; the figures, dates and commitments are not. A reply promising
+a resolution date nobody agreed to is worse than a late reply.
+
+---
+
+## One complaint
 
 You route a complaint. Route it wrong and a consumer with no supply waits
 behind a tariff query, or a burning smell from a meter is queued as routine.

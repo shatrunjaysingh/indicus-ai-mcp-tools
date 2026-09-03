@@ -16,6 +16,7 @@ from __future__ import annotations
 import discom_data as data
 import discom_portfolio as portfolio
 import discom_td as td
+import discom_complaints as complaints
 import discom_survey as survey
 import discom_theft as theft
 import csv
@@ -1776,5 +1777,262 @@ def restoration_export(min_risk: int = 70, include_blocked: bool = False) -> dic
         "columns": columns,
         "filters_applied": {"min_risk": min_risk,
                             "include_blocked": include_blocked},
+        "preview": preview,
+    }
+
+
+# --- complaint queue ---
+# Mounted at /complaint-queue rather than /complaints: the
+# single-complaint route above is /complaints/{complaint_id} and
+# matches any literal path added after it, so /complaints/queue
+# arrived as a lookup for a complaint called 'queue'.----------------------------------------------------
+# Use case 6. Eight thousand a month, with statutory clocks running on each.
+
+@app.get("/complaint-queue", operation_id="getComplaintQueue",
+         summary="The month's complaints: categories, priorities, SLA and escalation")
+def complaint_queue() -> dict:
+    """The whole queue, classified.
+
+    `safety_overrides` is the count worth reading first: complaints that
+    arrived as something else — a billing query, an outage report — and
+    contained a description of danger. Sparking, a burning smell, a fallen
+    conductor. Classified by their first sentence they would sit in a
+    seven-day billing queue.
+    """
+    t = complaints.TOTALS
+    return {
+        "complaints": t["complaints"],
+        "by_category": t["by_category"],
+        "by_priority": t["by_priority"],
+        "by_department": t["by_department"],
+        "sla": t["by_sla"],
+        "escalation_risk": t["escalation"],
+        "repeats": t["repeats"],
+        "safety_overrides": t["safety_overrides"],
+        "safety_override_note": (
+            "Complaints raised as something else that contain a description of "
+            "danger. Safety is checked before category, not as a tie-break."),
+        "estimation_catchup_diagnosed": t["estimation_catchup"],
+        "estimation_catchup_note": (
+            "Billing complaints whose cause is a run of estimated periods "
+            "followed by an actual read, not a fast meter. These need an "
+            "explanation to the consumer, not a meter test."),
+        "prior_closed_without_visit": t["closed_without_visit_history"],
+        "sla_windows_hours": {k: v["hours"] for k, v in complaints.SLA.items()},
+        "sla_note": (
+            "Standards of Performance set by the state commission. A breach is "
+            "a compensation liability, not a service metric."),
+    }
+
+
+@app.get("/complaint-queue/list", operation_id="listComplaintsForAction",
+         summary="Complaints filtered by priority, SLA status, escalation or department")
+def complaints_for_action(priority: str | None = None,
+                          sla_status: str | None = None,
+                          escalation_risk: str | None = None,
+                          department: str | None = None,
+                          category: str | None = None,
+                          unresolved_only: bool = True,
+                          limit: int = 20) -> dict:
+    """The working queue, so a supervisor sees the exceptions."""
+    rows = [
+        c for c in complaints.COMPLAINTS
+        if (not unresolved_only or not c.resolved)
+        and (priority is None or c.priority == priority)
+        and (sla_status is None or c.sla_status == sla_status)
+        and (escalation_risk is None or c.escalation_risk == escalation_risk)
+        and (department is None or c.department == department)
+        and (category is None or c.category == category)
+    ]
+    rows.sort(key=lambda c: c.hours_remaining)
+    shown = rows[: max(1, min(limit, 100))]
+    return {
+        "matched": len(rows),
+        "filters_applied": {
+            "priority": priority or "all", "sla_status": sla_status or "all",
+            "escalation_risk": escalation_risk or "all",
+            "department": department or "all", "category": category or "all",
+            "unresolved_only": unresolved_only,
+            "sorted_by": "hours remaining on the SLA clock, soonest first",
+        },
+        "complaints": [
+            {"complaint_id": c.complaint_id, "consumer_no": c.consumer_no,
+             "division": c.division, "channel": c.channel,
+             "received": c.received, "category": c.category,
+             "priority": c.priority, "department": c.department,
+             "sla_status": c.sla_status,
+             "hours_remaining": c.hours_remaining,
+             "escalation_risk": c.escalation_risk,
+             "is_repeat": c.is_repeat, "tags": c.tags,
+             "text": c.text}
+            for c in shown
+        ],
+    }
+
+
+@app.get("/complaint-queue/triage/{complaint_id}", operation_id="getComplaintTriage",
+         summary="One complaint classified, with cause, action and clock")
+def complaint_triage(complaint_id: str) -> dict:
+    """One complaint with everything the receiving team needs.
+
+    `likely_cause` is the value this adds over a routing rule. It tells the
+    team what to look at first, and for billing complaints it distinguishes a
+    fast meter from catch-up billing after a run of estimates — which are the
+    same complaint in the consumer's words and different jobs.
+    """
+    c = complaints.BY_ID.get(complaint_id.upper())
+    if c is None:
+        raise HTTPException(404, f"No complaint {complaint_id}.")
+    return {
+        "complaint_id": c.complaint_id, "consumer_no": c.consumer_no,
+        "division": c.division, "channel": c.channel, "received": c.received,
+        "text": c.text,
+        "classification": {
+            "category": c.category, "priority": c.priority,
+            "department": c.department,
+            "likely_cause": c.likely_cause,
+            "recommended_action": c.recommended_action,
+            "safety_override": c.safety_override,
+        },
+        "history": {
+            "prior_complaints": c.prior_complaints,
+            "prior_closed_without_visit": c.prior_closed_without_visit,
+            "is_repeat": c.is_repeat,
+        },
+        "sla": {
+            "window_hours": c.sla_hours,
+            "hours_elapsed": c.hours_elapsed,
+            "hours_remaining": c.hours_remaining,
+            "status": c.sla_status,
+            "reassigned_once": c.reassigned_once,
+        },
+        "escalation_risk": c.escalation_risk,
+        "billing_context": {
+            "estimated_periods_before_actual": c.estimated_periods_before_actual,
+        },
+        "tags": c.tags,
+        "resolved": c.resolved,
+    }
+
+
+@app.get("/complaint-queue/sla-forecast", operation_id="getSLABreachForecast",
+         summary="Complaints that will breach their SLA in the next N hours")
+def sla_forecast(within_hours: int = 24, department: str | None = None) -> dict:
+    """What is about to breach, while there is still time to prevent it.
+
+    Counting breaches afterwards is a report. This is the same data early
+    enough to act on, which is the only form of it that saves a compensation
+    payment.
+    """
+    rows = [
+        c for c in complaints.COMPLAINTS
+        if not c.resolved and c.sla_status != "BREACHED"
+        and 0 < c.hours_remaining <= within_hours
+        and (department is None or c.department == department)
+    ]
+    rows.sort(key=lambda c: c.hours_remaining)
+    already = [c for c in complaints.COMPLAINTS
+               if not c.resolved and c.sla_status == "BREACHED"
+               and (department is None or c.department == department)]
+    from collections import Counter
+    return {
+        "window_hours": within_hours,
+        "department": department or "all",
+        "will_breach_within_window": len(rows),
+        "already_breached": len(already),
+        "by_department": dict(Counter(c.department for c in rows).most_common()),
+        "by_category": dict(Counter(c.category for c in rows).most_common()),
+        "soonest": [
+            {"complaint_id": c.complaint_id, "category": c.category,
+             "department": c.department, "priority": c.priority,
+             "hours_remaining": c.hours_remaining,
+             "escalation_risk": c.escalation_risk}
+            for c in rows[:15]
+        ],
+        "note": ("A Standards of Performance breach is a compensation "
+                 "liability. These are the ones still preventable."),
+    }
+
+
+@app.get("/complaint-queue/response-facts/{complaint_id}",
+         operation_id="getComplaintResponseFacts",
+         summary="The verified facts needed to answer one complaint")
+def response_facts(complaint_id: str) -> dict:
+    """What a reply must be built from, so the reply is not invented.
+
+    Returns facts, not prose. The wording is the agent's job; the figures,
+    dates and commitments are not, and a response that states a resolution date
+    nobody agreed to is worse than a late reply.
+    """
+    c = complaints.BY_ID.get(complaint_id.upper())
+    if c is None:
+        raise HTTPException(404, f"No complaint {complaint_id}.")
+    facts = {
+        "complaint_id": c.complaint_id,
+        "consumer_no": c.consumer_no,
+        "received": c.received,
+        "category": c.category,
+        "what_the_consumer_asked": c.text,
+        "established_cause": c.likely_cause,
+        "action_being_taken": c.recommended_action,
+        "sla_window_hours": c.sla_hours,
+        "hours_remaining": c.hours_remaining,
+        "prior_complaints_on_this_issue": c.prior_complaints,
+    }
+    if c.estimated_periods_before_actual >= 3:
+        facts["billing_explanation"] = (
+            f"{c.estimated_periods_before_actual} periods were billed on "
+            f"estimated reads, then an actual read recovered the difference in "
+            f"one bill. The meter is not at fault and the total billed is not "
+            f"more than the units used.")
+    if c.prior_closed_without_visit:
+        facts["acknowledge"] = (
+            f"{c.prior_closed_without_visit} earlier complaint(s) on this "
+            f"issue were closed with no site visit recorded. The reply should "
+            f"acknowledge that rather than repeat the offer.")
+    facts["do_not_state"] = (
+        "Any resolution date not already committed, any cause not established "
+        "above, and any assurance about compensation.")
+    return facts
+
+
+@app.get("/complaint-queue/export", operation_id="exportComplaints",
+         summary="Write the complaint queue to CSV and return its link")
+def complaints_export(sla_status: str | None = None,
+                      unresolved_only: bool = True) -> dict:
+    """Export the queue. The rows do not come back through this call."""
+    exports = Path(__file__).resolve().parent / "_exports"
+    exports.mkdir(exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    name = f"complaints-{stamp}.csv"
+    path = exports / name
+    columns = ["complaint_id", "consumer_no", "division", "channel",
+               "received", "category", "priority", "department",
+               "likely_cause", "recommended_action", "sla_hours",
+               "hours_elapsed", "hours_remaining", "sla_status",
+               "escalation_risk", "is_repeat", "prior_complaints",
+               "prior_closed_without_visit", "safety_override", "resolved"]
+    rows = 0
+    preview: list[dict] = []
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        for c in complaints.COMPLAINTS:
+            if unresolved_only and c.resolved:
+                continue
+            if sla_status and c.sla_status != sla_status:
+                continue
+            record = {k: getattr(c, k) for k in columns}
+            writer.writerow(record)
+            rows += 1
+            if len(preview) < 5:
+                preview.append(record)
+    return {
+        "rows": rows, "file": name,
+        "download_url": f"{PUBLIC_BASE_URL}/discom/exports/{name}",
+        "size_kb": round(path.stat().st_size / 1024, 1),
+        "columns": columns,
+        "filters_applied": {"sla_status": sla_status or "all",
+                            "unresolved_only": unresolved_only},
         "preview": preview,
     }
