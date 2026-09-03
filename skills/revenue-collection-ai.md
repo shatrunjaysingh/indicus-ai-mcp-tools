@@ -92,6 +92,20 @@ Say what the file contains and what the filters were, so the person opening it
 in Excel knows what they are holding. An export whose selection nobody can
 reconstruct is not evidence of anything.
 
+### The highest response rate is not the best action
+
+Disconnection has the highest response rate of any channel against every
+segment that can pay — reliable-slow responds at 0.94, because people pay
+immediately when their supply is cut. **It is the most effective action
+available and, against that segment, the least defensible.** They pay every
+cycle. Cutting them off to collect a fortnight earlier is a response rate, not
+a justification.
+
+When comparing the ladder, say what each rung costs the consumer as well as the
+utility. The ordering by effectiveness is almost the reverse of the ordering by
+proportionality, and a recommendation that only reads the response column will
+always arrive at disconnection.
+
 ### Disconnection is not a ranking
 
 Every other channel can be pointed at the highest-value accounts. This one

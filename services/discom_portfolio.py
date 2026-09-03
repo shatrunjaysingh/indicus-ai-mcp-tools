@@ -80,9 +80,12 @@ SEGMENTS: dict[str, dict] = {
                       "Manages cash rather than avoiding payment.",
         "p_base": 0.88,
         "response": {"sms": 0.62, "call": 0.71, "field_visit": 0.74,
-                     "notice": 0.76},
+                     "notice": 0.76, "disconnection": 0.94},
         "note": "The most over-served segment in most DISCOMs. A field visit "
-                "here recovers what an SMS would have.",
+                "here recovers what an SMS would have. Disconnection scores "
+                "0.94 because these consumers pay immediately when cut off — "
+                "which makes it the most effective and the least defensible "
+                "action available against them.",
     },
     "recent_deterioration": {
         "label": "Recently deteriorated",
@@ -90,7 +93,7 @@ SEGMENTS: dict[str, dict] = {
                       "change of circumstances, not a payment habit.",
         "p_base": 0.63,
         "response": {"sms": 0.28, "call": 0.55, "field_visit": 0.61,
-                     "notice": 0.58},
+                     "notice": 0.58, "disconnection": 0.79},
         "note": "The segment where early intervention changes the outcome. "
                 "Left alone these become chronic within two quarters.",
     },
@@ -100,7 +103,7 @@ SEGMENTS: dict[str, dict] = {
                       "broken promises to pay.",
         "p_base": 0.17,
         "response": {"sms": 0.03, "call": 0.07, "field_visit": 0.24,
-                     "notice": 0.19},
+                     "notice": 0.19, "disconnection": 0.41},
         "note": "Low probability, high value. Worth working only where the "
                 "amount justifies the visit.",
     },
@@ -109,7 +112,7 @@ SEGMENTS: dict[str, dict] = {
         "definition": "An open complaint or billing dispute on the amount.",
         "p_base": 0.35,
         "response": {"sms": 0.05, "call": 0.31, "field_visit": 0.12,
-                     "notice": 0.08},
+                     "notice": 0.08, "disconnection": 0.22},
         "note": "Recovery action on a disputed balance generates complaints "
                 "and regulatory exposure. Resolve the dispute first.",
     },
@@ -118,7 +121,7 @@ SEGMENTS: dict[str, dict] = {
         "definition": "No consumption, undelivered notices, no contact.",
         "p_base": 0.06,
         "response": {"sms": 0.01, "call": 0.02, "field_visit": 0.09,
-                     "notice": 0.02},
+                     "notice": 0.02, "disconnection": 0.03},
         "note": "Nothing to recover from the occupier. Field visits here are "
                 "the largest single waste in most collection programmes.",
     },
@@ -128,7 +131,7 @@ SEGMENTS: dict[str, dict] = {
                       "billing setup problem rather than a payment problem.",
         "p_base": 0.54,
         "response": {"sms": 0.41, "call": 0.63, "field_visit": 0.48,
-                     "notice": 0.44},
+                     "notice": 0.44, "disconnection": 0.71},
         "note": "Check the tariff and meter setup before treating as recovery.",
     },
 }
