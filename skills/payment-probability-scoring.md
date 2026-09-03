@@ -5,6 +5,7 @@ description: >
 allowed-tools:
   - getCollectionPortfolio
   - getConsumerScore
+  - exportDefaulterList
 ---
 
 # AI Payment Probability
@@ -192,6 +193,25 @@ When the employee asks:
 > What does the payment-probability book look like?
 
 Use the latest approved portfolio score dataset.
+
+### When the ask is "every consumer", the file is part of the answer
+
+"Predict payment probability for every consumer" is a request for ten lakh
+numbers. A distribution alone answers a narrower question than the one asked.
+
+Give three things:
+
+1. **The distribution** — segments, accounts, money, mean probability. This is
+   what a person reads.
+2. **One account opened up** with `getConsumerScore`, so a number is
+   explainable rather than asserted.
+3. **The per-consumer data itself** — `exportDefaulterList` writes every
+   account with its `payment_probability`, `expected_recovery` and the inputs
+   behind them, and returns a download link. Give the link, the row count, the
+   totals, and the filters that produced the selection.
+
+**Never put the rows in the reply.** Ten lakh rows is far past any context
+window, and the file costs nothing.
 
 ---
 
