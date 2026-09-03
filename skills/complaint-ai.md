@@ -1823,3 +1823,18 @@ It answers:
 > **"What is actually happening, who needs to act, how urgently, what evidence
 > supports that conclusion, what should they do first, and what can we learn
 > from this complaint to prevent the next one?"**
+
+## Handing over the full list
+
+When the answer is a list somebody will work — the complaint queue, every matching row
+rather than a sample — call `exportComplaints` and give the **download link**, the row
+count and the totals.
+
+**Never put the rows in your reply.** Tens of thousands of rows is around two
+million tokens: it does not fit in the context, and if it did it would cost
+several dollars to produce something nobody can read. The file costs nothing.
+Show the few sample rows the export returns so the reader sees the shape, and
+point at the file for the rest.
+
+Say what the file contains and which filters produced it. An export whose
+selection nobody can reconstruct is not evidence of anything.

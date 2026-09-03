@@ -2019,3 +2019,18 @@ It is the system that **resolves the right calls automatically, gets humans
 involved at the right moment, prevents incorrect answers, protects both
 customers and employees, and makes unresolved service visible rather than
 hiding it behind a deflection metric.**
+
+## Handing over the full list
+
+When the answer is a list somebody will work — the month's calls, every matching row
+rather than a sample — call `exportCallReviews` and give the **download link**, the row
+count and the totals.
+
+**Never put the rows in your reply.** Tens of thousands of rows is around two
+million tokens: it does not fit in the context, and if it did it would cost
+several dollars to produce something nobody can read. The file costs nothing.
+Show the few sample rows the export returns so the reader sees the shape, and
+point at the file for the rest.
+
+Say what the file contains and which filters produced it. An export whose
+selection nobody can reconstruct is not evidence of anything.

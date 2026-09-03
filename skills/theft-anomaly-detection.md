@@ -3602,3 +3602,18 @@ Never call a consumer a thief.
 Never state that a consumer has stolen electricity unless an authorized physical/legal process has independently established that finding and the statement is being accurately attributed.
 
 The purpose of this skill is to move utility operations from random inspection to **evidence-based, intelligence-led inspection while reducing false positives, unnecessary field visits, and unsupported conclusions.**
+
+## Handing over the full list
+
+When the answer is a list somebody will work — the inspection list, every matching row
+rather than a sample — call `exportInspectionList` and give the **download link**, the row
+count and the totals.
+
+**Never put the rows in your reply.** Tens of thousands of rows is around two
+million tokens: it does not fit in the context, and if it did it would cost
+several dollars to produce something nobody can read. The file costs nothing.
+Show the few sample rows the export returns so the reader sees the shape, and
+point at the file for the rest.
+
+Say what the file contains and which filters produced it. An export whose
+selection nobody can reconstruct is not evidence of anything.

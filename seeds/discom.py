@@ -615,7 +615,9 @@ AGENTS = [
          "getRestorationCase", "buildRestorationTasks",
          "exportRestorationCases",
          "getConsumer", "getDisconnectionRecord", "getConsumptionHistory",
-         "getMeterStatus", "getSiteSurvey", "getBillingHistory"],
+         "getMeterStatus", "getSiteSurvey", "getBillingHistory",
+         "getNoticeHistory",
+         "getPaymentHistory"],
         "A consumer number means work that case. Anything else means work the "
         "whole screening run — start with getRestorationScreening.\n\n"
         "At scale, give the apparent count and the surviving count together. "
@@ -644,7 +646,9 @@ AGENTS = [
         ["getComplaintQueue", "listComplaintsForAction", "getComplaintTriage",
          "getSLABreachForecast", "getComplaintResponseFacts", "exportComplaints",
          "getComplaint", "listComplaints", "getComplaintHistory", "getConsumer",
-         "getConsumptionHistory", "getBillingHistory", "getOutageHistory"],
+         "getConsumptionHistory", "getBillingHistory", "getOutageHistory",
+         "getMeterStatus",
+         "getNoticeHistory"],
         "A complaint id means triage that complaint. Anything else means work "
         "the whole queue — start with getComplaintQueue.\n\n"
         "At queue scale, report the safety overrides first: complaints that "
@@ -743,7 +747,8 @@ AGENTS = [
         "copilot", "AI Employee Copilot", "deep", "ai-employee-copilot",
         ["listTDConsumers", "getDivisionSummary", "listDivisions",
          "getConsumer", "getBillingHistory", "getPaymentHistory",
-         "getDisconnectionRecord", "getConsumptionHistory", "getFeederLosses"],
+         "getDisconnectionRecord", "getConsumptionHistory", "getFeederLosses",
+         "exportTDRecoveryList", "exportDefaulterList"],
         "You answer operational questions for people who run a distribution "
         "utility, and your answers reach management reviews.\n\n"
         "State the filters and boundary rules you applied. Give denominators "
@@ -877,7 +882,17 @@ async def main() -> None:
             version = "1.0.0"
             if prior and prior.get("latest_version"):
                 major, minor, _patch = prior["latest_version"].split(".")
-                version = f"{major}.{int(minor) + 1}.0"
+                # Bump past every version that already exists, not just past
+                # the latest published one. A deprecated version still occupies
+                # its number — versions are immutable — so assuming the next
+                # minor is free fails as soon as anything has been rolled back.
+                taken = {v["version"] for v in
+                         (await c.get(f"/plugins/{prior['id']}/detail")).json()
+                         .get("versions", [])}
+                minor = int(minor)
+                while f"{major}.{minor + 1}.0" in taken:
+                    minor += 1
+                version = f"{major}.{minor + 1}.0"
                 detail = await c.get(f"/plugins/{prior['id']}/detail")
                 if detail.status_code == 200:
                     latest = next((v for v in detail.json().get("versions", [])

@@ -1489,3 +1489,19 @@ For peak management, peak-hour accuracy matters more than average daily error.
 And for every decision:
 
 **forecast → uncertainty → consequence → action.**
+
+## Handing over the full list
+
+When the answer is a list somebody will work — every matching row, not a
+sample — use `exportForecastAccuracy` and give the **download link**, the row count and
+the totals.
+
+**Never put the rows in your reply.** A list of tens of thousands of rows is
+around two million tokens: it does not fit in the context, and if it did it
+would cost several dollars to produce something nobody can read. The file costs
+nothing. Show the handful of sample rows the export returns so the reader can
+see the shape, and point at the file for the rest.
+
+Say what the file contains and which filters produced it, so the person opening
+it in Excel knows what they are holding. An export whose selection nobody can
+reconstruct is not evidence of anything.

@@ -1553,3 +1553,18 @@ The goal is not to predict every failure.
 The goal is to **identify deterioration early enough that the DISCOM can inspect,
 repair, rebalance, monitor, or replace an asset before an avoidable failure
 becomes an emergency outage.**
+
+## Handing over the full list
+
+When the answer is a list somebody will work — the ranked fleet, every matching row
+rather than a sample — call `exportAssetRiskList` and give the **download link**, the row
+count and the totals.
+
+**Never put the rows in your reply.** Tens of thousands of rows is around two
+million tokens: it does not fit in the context, and if it did it would cost
+several dollars to produce something nobody can read. The file costs nothing.
+Show the few sample rows the export returns so the reader sees the shape, and
+point at the file for the rest.
+
+Say what the file contains and which filters produced it. An export whose
+selection nobody can reconstruct is not evidence of anything.
