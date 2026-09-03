@@ -277,7 +277,10 @@ def _generate() -> tuple[list[ScreenedConsumer], dict]:
         agg["repeated_tampering"] += int(c.tamper_events_12m >= 2)
         if c.suppressed_by:
             agg["suppressed_by_documentation"] += 1
-            if c.risk_before_suppression >= 45:
+            # Only counts as saved if the documentation actually took it out
+            # of the inspection band. An account that was 100 and is still 100
+            # has unexplained evidence left and is not saved by anything.
+            if c.risk_before_suppression >= 45 and c.anomaly_risk < 45:
                 agg["would_have_been_flagged"] += 1
         d = agg["by_division"][c.division]
         d["screened"] += 1
@@ -294,7 +297,7 @@ def _generate() -> tuple[list[ScreenedConsumer], dict]:
 
 
 def _load() -> tuple[list[ScreenedConsumer], dict]:
-    key = f"{SEED}-{POPULATION}-{MATERIALISE}-v2"
+    key = f"{SEED}-{POPULATION}-{MATERIALISE}-v3"
     cache = Path(__file__).resolve().parent / "_theft_cache.json"
     if cache.exists():
         try:

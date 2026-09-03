@@ -1271,10 +1271,19 @@ def inspection_plan(capacity: int = 0, division: str | None = None,
             400,
             f"Inspection capacity is {theft.INSPECTION_CAPACITY_PER_MONTH:,} "
             f"per month; {cap:,} was requested.")
+    # Filtered on the score after suppression, and NOT on whether a documented
+    # reason exists. A tariff change explains a consumer's peer deviation; it
+    # does not explain the bypass found at their premises. Excluding every
+    # account that has any documentation dropped consumers with unexplained
+    # physical evidence off the list because a clerk had filed something about
+    # a different signal.
+    #
+    # Suppression already does the right thing: it removes the signals the
+    # document explains, so an account whose remaining score clears the
+    # threshold belongs on the list and one whose does not has left it.
     pool = [
         c for c in theft.RANKED
         if c.anomaly_risk >= min_risk
-        and not c.suppressed_by
         and (division is None or c.division == division)
     ]
     selected = pool[:cap]
@@ -1287,7 +1296,11 @@ def inspection_plan(capacity: int = 0, division: str | None = None,
         "risk_range": (f"{selected[-1].anomaly_risk}-{selected[0].anomaly_risk}"
                        if selected else "none"),
         "cost": round(len(selected) * theft.INSPECTION_COST, 2),
-        "excluded_documented": theft.TOTALS["suppressed_by_documentation"],
+        "documented_explanation_applied": theft.TOTALS["suppressed_by_documentation"],
+        "dropped_below_threshold_by_documentation":
+            theft.TOTALS["would_have_been_flagged"],
+        "in_plan_with_partial_documentation": sum(
+            1 for c in selected if c.suppressed_by),
         "with_physical_evidence": sum(
             1 for c in selected if c.bypass_indicator or c.tamper_events_12m >= 2),
         "signal_mix": dict(Counter(
