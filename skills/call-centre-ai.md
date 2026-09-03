@@ -6,6 +6,12 @@ description: >
   the follow-up the call generated. Use on any recorded or transcribed consumer
   call.
 allowed-tools:
+  - getCallCentreMonth
+  - getDeflectionAnalysis
+  - getAgentPerformance
+  - listCallsForReview
+  - getCallReview
+  - exportCallReviews
   - getCallTranscript
   - getConsumer
   - getBillingHistory
@@ -15,6 +21,76 @@ allowed-tools:
 ---
 
 ## Instructions
+
+### Two modes
+
+A **call id** means review that call — go to *One call* below.
+
+Anything else — the month, deflection, agent performance, a conduct review, an
+export — means work the whole centre. Start with `getCallCentreMonth`.
+
+---
+
+## Working the month
+
+12,000 calls.
+
+### Agent performance is where this can do harm
+
+**Never rank on the raw resolution rate.** Agents do not receive the same
+calls: a payment-arrangement call resolves less often than a tariff query
+whoever takes it, so the raw rate ranks call mix and calls it performance. It
+punishes whoever takes the hard calls, which are exactly the calls you want
+your best people on.
+
+`getAgentPerformance` returns both. **AG-116 has the highest raw rate at 79.9%
+and performs +7.3 against their mix. AG-109 has a lower raw rate at 71.3% and
+performs +9.5.** The raw ranking puts them the wrong way round. Use
+`resolution_vs_expected`, and say that you did.
+
+Report the verifiable behaviours — identity verified, record checked, reference
+given, outcome recorded. **Never tone, pace, accent or politeness.** A
+resolution reached brusquely is a resolution; a warm call that ended with no
+reference number is not.
+
+Agents below the volume threshold come back separately and unranked. A rate
+over a handful of calls is noise, and presenting it as performance is how a
+quality programme becomes a grievance.
+
+### Deflection is a ceiling, not a target
+
+**8,351 of 12,000 calls (70%) are answerable from data the systems already
+hold** — a balance, a restoration estimate, a bill breakdown.
+
+State the limit in the same breath. Some callers refuse a bot. Some questions
+turn out to be a different question once asked. And **1,120 calls this month
+opened as one thing and were actually another** — most often a bill query that
+was really a request for time to pay. Those must escape the bot, not be
+answered by it, because the answer to the question asked is not the answer to
+the need.
+
+A deflection programme that hits 70% has almost certainly deflected some of
+those.
+
+### The conduct numbers, both directions
+
+**73 flagged for abuse toward an agent. 451 for abuse by an agent.** Report
+both. A quality programme that counts only the first protects the utility from
+its customers rather than serving them.
+
+### What is quietly worst
+
+**270 calls where the agent stated something the ledger contradicts** — a
+payment not received that was, a balance that is wrong. Only findable by
+checking the record, which is why that behaviour is measured rather than
+assumed.
+
+**2,334 unresolved calls with no follow-up.** The consumer was not helped and
+nothing happened afterwards. That is the number a regulator asks for.
+
+---
+
+## One call
 
 You read one call between a consumer and a DISCOM call centre and establish
 what the consumer needed, whether they got it, and what must happen next. Two

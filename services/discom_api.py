@@ -16,6 +16,7 @@ from __future__ import annotations
 import discom_data as data
 import discom_portfolio as portfolio
 import discom_td as td
+import discom_calls as calls
 import discom_complaints as complaints
 import discom_survey as survey
 import discom_theft as theft
@@ -2033,6 +2034,278 @@ def complaints_export(sla_status: str | None = None,
         "size_kb": round(path.stat().st_size / 1024, 1),
         "columns": columns,
         "filters_applied": {"sla_status": sla_status or "all",
+                            "unresolved_only": unresolved_only},
+        "preview": preview,
+    }
+
+
+# --- call centre ---
+# Mounted at /call-centre, not /calls: the single-call route above is
+# /calls/{call_id} and matches any literal path added after it. The
+# same mistake was made with /complaints an hour earlier.--------------------------------------------------------
+# Use case 7. Twelve thousand calls a month.
+
+@app.get("/call-centre", operation_id="getCallCentreMonth",
+         summary="The month's calls: intent, resolution, conduct, unresolved")
+def call_month() -> dict:
+    """What came in and what happened to it.
+
+    `intent_reframed` counts calls that opened as one thing and were actually
+    another — most often a bill query that was a request for time to pay.
+    Getting that right is the difference between an explanation nobody wanted
+    and an instalment plan that gets the DISCOM paid.
+    """
+    t = calls.TOTALS
+    n = t["calls"]
+    return {
+        "calls": n,
+        "by_intent": t["by_intent"],
+        "resolution": t["resolution"],
+        "resolution_rate": round(t["resolution"]["YES"] / n * 100, 1),
+        "intent_reframed": t["intent_reframed"],
+        "intent_reframed_note": (
+            "Opened as one intent, actual need was another. Callers lead with "
+            "what upset them and reach the need later."),
+        "conduct_flags": t["conduct"],
+        "conduct_note": (
+            "ABUSE_TOWARD_AGENT requires threats or sustained personal abuse, "
+            "not a frustrated consumer — the flag can be used to refuse "
+            "service. ABUSE_BY_AGENT is looked for as hard; a quality "
+            "programme counting only one direction protects the utility from "
+            "its customers rather than serving them."),
+        "record_discrepancies": t["record_discrepancies"],
+        "record_discrepancy_note": (
+            "Calls where the agent stated something the ledger contradicts. "
+            "Only findable by checking the record, which is why that behaviour "
+            "is measured."),
+        "commitments_made": t["commitments_made"],
+        "unresolved_without_followup": t["unresolved_no_followup"],
+    }
+
+
+@app.get("/call-centre/deflection", operation_id="getDeflectionAnalysis",
+         summary="Which calls a voice bot could close, and which it must not")
+def deflection() -> dict:
+    """The self-service opportunity, and its limit.
+
+    Deflectable means the answer is a fact the systems already hold — a
+    balance, a restoration estimate, a bill breakdown. It does not mean the
+    caller will accept a machine giving it to them, and it must never include
+    a call where the answer is a decision: an instalment request, a meter
+    dispute, a theft report. Those need a person with authority.
+    """
+    t = calls.TOTALS
+    n = t["calls"]
+    rows = []
+    for intent, spec in calls.INTENTS.items():
+        count = t["by_intent"][intent]
+        rows.append({
+            "intent": intent, "calls": count,
+            "share_pct": round(count / n * 100, 1),
+            "deflectable": spec["deflectable"],
+            "what_a_bot_would_answer": spec["answer"],
+        })
+    rows.sort(key=lambda r: r["calls"], reverse=True)
+    deflectable = t["deflectable"]
+    return {
+        "calls": n,
+        "deflectable": deflectable,
+        "deflectable_pct": round(deflectable / n * 100, 1),
+        "must_reach_a_person": n - deflectable,
+        "by_intent": rows,
+        "caveat": (
+            "A ceiling, not a target. Some callers will refuse a bot, some "
+            "questions turn out to be a different question once asked, and a "
+            "reframed call — one that opens as a bill query and is really a "
+            "request for time to pay — must escape the bot rather than be "
+            f"answered by it. {t['intent_reframed']:,} calls this month were "
+            "of that kind."),
+    }
+
+
+@app.get("/call-centre/agents", operation_id="getAgentPerformance",
+         summary="Agent metrics, raw and adjusted for the calls they received")
+def agent_performance(min_calls: int = 100) -> dict:
+    """Verifiable behaviours, and resolution against what their mix predicted.
+
+    Two things this refuses to do.
+
+    It does not score tone, pace, accent or politeness. Those are not in the
+    data and should not be: a resolution reached rudely is a resolution, and a
+    pleasant call that ended with no reference number is not.
+
+    It does not rank on raw resolution rate. Agents do not receive the same
+    calls — a payment-arrangement call resolves less often than a tariff query
+    whoever takes it — so the raw rate ranks call mix and calls it performance.
+    `resolution_vs_expected` is the difference between what they resolved and
+    what their own mix predicted, and it is the only figure here worth ranking
+    on.
+
+    Agents below `min_calls` are returned separately and unranked. A rate over
+    a handful of calls is noise, and presenting it as performance is how a
+    quality programme becomes a grievance.
+    """
+    ranked, thin = [], []
+    for agent, m in calls.PER_AGENT.items():
+        if not m["calls"]:
+            continue
+        raw = m["resolved"] / m["calls"]
+        expected = m["expected_resolved"] / m["calls"]
+        row = {
+            "agent_id": agent,
+            "calls": m["calls"],
+            "resolution_rate_raw": round(raw * 100, 1),
+            "expected_from_call_mix": round(expected * 100, 1),
+            "resolution_vs_expected": round((raw - expected) * 100, 1),
+            "reference_given_pct": round(m["reference_given"] / m["calls"] * 100, 1),
+            "identity_verified_pct": round(m["identity_verified"] / m["calls"] * 100, 1),
+            "record_checked_pct": round(m["record_checked"] / m["calls"] * 100, 1),
+            "outcome_recorded_pct": round(m["outcome_recorded"] / m["calls"] * 100, 1),
+            "abuse_by_agent_flags": m["abuse_by_agent"],
+            "top_intents": dict(sorted(m["mix"].items(),
+                                       key=lambda kv: -kv[1])[:3]),
+        }
+        (ranked if m["calls"] >= min_calls else thin).append(row)
+    ranked.sort(key=lambda r: r["resolution_vs_expected"], reverse=True)
+    return {
+        "agents": len(calls.PER_AGENT),
+        "min_calls_for_ranking": min_calls,
+        "ranked": ranked,
+        "below_volume_threshold": thin,
+        "ranked_by": "resolution_vs_expected — resolution against what their own call mix predicted",
+        "warning": (
+            "Do not rank on resolution_rate_raw. It ranks call mix and calls "
+            "it performance, and it punishes whoever takes the hard calls. Do "
+            "not draw a conclusion about any agent from a single call."),
+    }
+
+
+@app.get("/call-centre/list", operation_id="listCallsForReview",
+         summary="Calls filtered by intent, resolution, conduct or discrepancy")
+def calls_for_review(intent: str | None = None, resolved: str | None = None,
+                     conduct_flag: str | None = None,
+                     record_discrepancy: bool = False,
+                     reframed_only: bool = False,
+                     unresolved_no_followup: bool = False,
+                     agent_id: str | None = None, limit: int = 20) -> dict:
+    """The review queue."""
+    rows = [
+        c for c in calls.CALLS
+        if (intent is None or c.actual_intent == intent)
+        and (resolved is None or c.resolved == resolved)
+        and (conduct_flag is None or c.conduct_flag == conduct_flag)
+        and (not record_discrepancy or c.record_discrepancy)
+        and (not reframed_only or c.intent_reframed)
+        and (not unresolved_no_followup
+             or (c.resolved != "YES" and not c.followed_up))
+        and (agent_id is None or c.agent_id == agent_id)
+    ]
+    shown = rows[: max(1, min(limit, 100))]
+    return {
+        "matched": len(rows),
+        "filters_applied": {
+            "intent": intent or "all", "resolved": resolved or "all",
+            "conduct_flag": conduct_flag or "all",
+            "record_discrepancy": record_discrepancy,
+            "reframed_only": reframed_only,
+            "unresolved_no_followup": unresolved_no_followup,
+            "agent_id": agent_id or "all",
+        },
+        "calls": [
+            {"call_id": c.call_id, "consumer_no": c.consumer_no,
+             "agent_id": c.agent_id, "received": c.received,
+             "duration_sec": c.duration_sec,
+             "stated_intent": c.stated_intent, "actual_intent": c.actual_intent,
+             "resolved": c.resolved, "conduct_flag": c.conduct_flag,
+             "commitment_made": c.commitment_made,
+             "record_discrepancy": c.record_discrepancy,
+             "linked_complaint": c.linked_complaint, "tags": c.tags}
+            for c in shown
+        ],
+    }
+
+
+@app.get("/call-centre/review/{call_id}", operation_id="getCallReview",
+         summary="One call: intent, resolution, conduct and what was promised")
+def call_review(call_id: str) -> dict:
+    """One call reviewed.
+
+    `commitment_made` is the most actionable thing in any transcript — it is
+    what the DISCOM undertook to do, and it is routinely made and never
+    recorded.
+    """
+    c = calls.BY_ID.get(call_id.upper())
+    if c is None:
+        raise HTTPException(404, f"No call {call_id}.")
+    return {
+        "call_id": c.call_id, "consumer_no": c.consumer_no,
+        "agent_id": c.agent_id, "received": c.received,
+        "duration_sec": c.duration_sec,
+        "intent": {
+            "as_stated": c.stated_intent,
+            "actual_need": c.actual_intent,
+            "reframed": c.intent_reframed,
+            "note": ("Callers open with what upset them. A bill query that is "
+                     "really a request for time to pay is the common case."),
+        },
+        "resolution": {
+            "outcome": c.resolved,
+            "reference_given": c.reference_given,
+            "commitment_made": c.commitment_made,
+            "followed_up": c.followed_up,
+            "note": ("Judged on outcome, not on courtesy. A call ending with "
+                     "'I'll look into it' and no reference number is not "
+                     "resolved, however pleasant it was."),
+        },
+        "agent_behaviours": {
+            "identity_verified": c.identity_verified,
+            "record_checked": c.record_checked,
+            "outcome_recorded": c.outcome_recorded,
+        },
+        "conduct_flag": c.conduct_flag,
+        "record_discrepancy": c.record_discrepancy,
+        "linked_complaint": c.linked_complaint,
+        "tags": c.tags,
+    }
+
+
+@app.get("/call-centre/export", operation_id="exportCallReviews",
+         summary="Write the call review results to CSV and return its link")
+def calls_export(conduct_flag: str | None = None,
+                 unresolved_only: bool = False) -> dict:
+    """Export the month. The rows do not come back through this call."""
+    exports = Path(__file__).resolve().parent / "_exports"
+    exports.mkdir(exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    name = f"call-reviews-{stamp}.csv"
+    path = exports / name
+    columns = ["call_id", "consumer_no", "agent_id", "received",
+               "duration_sec", "stated_intent", "actual_intent",
+               "intent_reframed", "resolved", "reference_given",
+               "identity_verified", "record_checked", "outcome_recorded",
+               "commitment_made", "conduct_flag", "record_discrepancy",
+               "deflectable", "linked_complaint", "followed_up"]
+    rows = 0
+    preview: list[dict] = []
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        for c in calls.CALLS:
+            if conduct_flag and c.conduct_flag != conduct_flag:
+                continue
+            if unresolved_only and c.resolved == "YES":
+                continue
+            record = {k: getattr(c, k) for k in columns}
+            writer.writerow(record)
+            rows += 1
+            if len(preview) < 5:
+                preview.append(record)
+    return {
+        "rows": rows, "file": name,
+        "download_url": f"{PUBLIC_BASE_URL}/discom/exports/{name}",
+        "size_kb": round(path.stat().st_size / 1024, 1),
+        "columns": columns,
+        "filters_applied": {"conduct_flag": conduct_flag or "all",
                             "unresolved_only": unresolved_only},
         "preview": preview,
     }

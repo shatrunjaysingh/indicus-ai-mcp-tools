@@ -286,6 +286,42 @@ TOOLS = [
          "Prior complaints for a consumer and how each was closed — including "
          "closures with no site visit recorded.",
          "/consumers/{consumer_no}/complaints", _C),
+    _get("getCallCentreMonth",
+         "The month's calls: intent distribution, resolution, how many opened "
+         "as one intent and were actually another, conduct flags in both "
+         "directions, record discrepancies and unresolved calls with no "
+         "follow-up.",
+         "/call-centre"),
+    _get("getDeflectionAnalysis",
+         "Which calls a voice bot could close from data the systems already "
+         "hold, by intent, and which must reach a person.",
+         "/call-centre/deflection"),
+    _get("getAgentPerformance",
+         "Agent metrics: verifiable behaviours, and resolution against what "
+         "each agent's own call mix predicted. Returns both the raw rate and "
+         "the adjusted one, and holds back agents below a volume threshold.",
+         "/call-centre/agents", None, {"min_calls": "default 100"}),
+    _get("listCallsForReview",
+         "Calls filtered by intent, resolution, conduct flag, record "
+         "discrepancy, reframed intent, agent, or unresolved with no "
+         "follow-up.",
+         "/call-centre/list", None,
+         {"intent": "e.g. PAYMENT_ARRANGEMENT",
+          "resolved": "YES | NO | PARTIAL",
+          "conduct_flag": "ABUSE_TOWARD_AGENT | ABUSE_BY_AGENT | SUSPECTED_FRAUD | VULNERABILITY",
+          "record_discrepancy": "true | false",
+          "reframed_only": "true | false",
+          "unresolved_no_followup": "true | false",
+          "agent_id": "e.g. AG-109", "limit": "rows, max 100"}),
+    _get("getCallReview",
+         "One call: stated intent against actual need, resolution judged on "
+         "outcome, agent behaviours, conduct flag and what was promised.",
+         "/call-centre/review/{call_id}", {"call_id": "e.g. CL-70000"}),
+    _get("exportCallReviews",
+         "Writes the month's call reviews to CSV and returns a download link.",
+         "/call-centre/export", None,
+         {"conduct_flag": "e.g. ABUSE_BY_AGENT",
+          "unresolved_only": "true | false"}),
     _get("getCallTranscript",
          "Call-centre transcript, turn by turn, with timestamps for citation.",
          "/calls/{call_id}", {"call_id": "e.g. CALL-77201"}),
@@ -564,8 +600,22 @@ AGENTS = [
     ),
     (
         "call", "Call Centre AI", "deep", "call-centre-ai",
-        ["getCallTranscript", "getConsumer", "getBillingHistory",
+        ["getCallCentreMonth", "getDeflectionAnalysis", "getAgentPerformance",
+         "listCallsForReview", "getCallReview", "exportCallReviews",
+         "getCallTranscript", "getConsumer", "getBillingHistory",
          "getComplaintHistory", "getDisconnectionRecord", "getOutageHistory"],
+        "A call id means review that call. Anything else means work the "
+        "whole month — start with getCallCentreMonth.\n\n"
+        "Never rank agents on the raw resolution rate. Agents do not get "
+        "the same calls, so the raw rate ranks call mix and calls it "
+        "performance, punishing whoever takes the hard calls. Use "
+        "resolution_vs_expected and say that you did.\n\n"
+        "Report conduct flags in both directions. A quality programme "
+        "counting only abuse toward agents protects the utility from its "
+        "customers rather than serving them.\n\n"
+        "Deflection is a ceiling, not a target: calls that opened as one "
+        "thing and were actually another must escape the bot rather than "
+        "be answered by it.\n\n"
         "You establish what a caller needed, whether they got it, and what "
         "must happen next.\n\n"
         "Intent is what they needed, not what they said first: 'why is my bill "
