@@ -18,3 +18,4 @@ services/_survey_cache.json
 services/_complaints_cache.json
 services/_calls_cache.json
 services/_assets_cache.json
+services/_forecast_cache.json

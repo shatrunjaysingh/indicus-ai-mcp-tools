@@ -18,6 +18,7 @@ import discom_portfolio as portfolio
 import discom_td as td
 import discom_assets as assets
 import discom_calls as calls
+import discom_forecast as forecasting
 import discom_complaints as complaints
 import discom_survey as survey
 import discom_theft as theft
@@ -2601,4 +2602,240 @@ def fleet_export(min_risk: int = 0, band: str | None = None) -> dict:
         "note": ("Ranked fleet only — the top of the ranking, not every asset. "
                  "Assets with no telemetry carry risk_known=false."),
         "preview": preview,
+    }
+
+
+# --- demand forecasting ----------------------------------------------------
+# Use case 9. Mounted at /forecasting; /feeders/{id}/forecast already exists.
+
+@app.get("/forecasting/hierarchy", operation_id="getForecastHierarchy",
+         summary="Forecast accuracy at every level, from feeder to state")
+def forecast_hierarchy() -> dict:
+    """Accuracy by level, and the three things it shows.
+
+    **Random error cancels on aggregation; bias does not.** Feeders average
+    about 7% absolute error and the state comes out near 2%, because a feeder
+    that ran high and one that ran low net out on the way up. But the *bias* is
+    the same at every level — a systematic under-forecast survives aggregation
+    intact, and is invisible in any absolute-error measure.
+
+    **Peak accuracy is worse than average accuracy at every level.** A model
+    that is good in ordinary months and poor in the months when power actually
+    has to be bought is not a good model for procurement, however well it
+    scores overall.
+
+    **The aggregate number belongs to procurement and nobody else.** Load
+    management and shedding are decided at feeder and DT level, where the error
+    is three times larger. A programme judged on the state figure will be
+    reported as a success by the people buying power and as useless by the
+    people running the network.
+    """
+    t = forecasting.TOTALS
+    levels = t["levels"]
+    return {
+        "levels": levels,
+        "months_covered": t["months"],
+        "what_this_shows": {
+            "error_cancels_upward": (
+                f"feeder mean absolute error {levels['feeder']['mean_mape_pct']}% "
+                f"against state {levels['state']['mean_mape_pct']}% — the same "
+                f"forecasts, aggregated"),
+            "bias_does_not_cancel": (
+                f"bias is {levels['feeder']['mean_bias_pct']}% at feeder level "
+                f"and {levels['state']['mean_bias_pct']}% at state level. A "
+                f"systematic under-forecast survives aggregation and is "
+                f"invisible in absolute-error measures"),
+            "peak_is_worse_than_average": (
+                f"state absolute error {levels['state']['mean_mape_pct']}% "
+                f"overall against {levels['state']['mean_peak_mape_pct']}% in "
+                f"peak months — the months the power has to be bought"),
+        },
+        "by_feeder_kind": t["feeder_kinds"],
+        "feeder_kind_note": (
+            "Rural agricultural feeders are the least predictable by a wide "
+            "margin. Their demand follows the crop calendar and the supply "
+            "schedule rather than temperature, so a temperature-driven model "
+            "has little to work with."),
+        "calendar": {
+            "festival_months": t["festival_months"],
+            "peak_months": t["peak_months"],
+            "irrigation_months": t["irrigation_months"],
+        },
+    }
+
+
+@app.get("/forecasting/nodes/{node_id}", operation_id="getNodeForecast",
+         summary="One node's forecast against actuals, month by month")
+def node_forecast(node_id: str) -> dict:
+    """One node at any level, with its monthly record.
+
+    Errors are returned per month rather than as an average, so the shape is
+    visible. A model with good average accuracy and bad peak accuracy is a
+    different problem from one that scatters, and only the monthly series shows
+    which you have.
+    """
+    n = forecasting.NODES.get(node_id.upper())
+    if n is None:
+        raise HTTPException(
+            404, f"No node {node_id}. Levels: state, circle, division, "
+                 f"subdivision, feeder — e.g. ST-1, CR-1, DV-11, SD-111, "
+                 f"FD-111-01.")
+    series = []
+    for m in forecasting.MONTHS:
+        f, a = n.forecast_mwh[m], n.actual_mwh[m]
+        series.append({
+            "month": m, "forecast_mwh": f, "actual_mwh": a,
+            "error_pct": round((f - a) / a * 100, 2),
+            "peak_month": m in set(forecasting.PEAK_MONTHS),
+            "festival_month": m in set(forecasting.FESTIVAL_MONTHS),
+        })
+    children = [c.node_id for c in forecasting.NODES.values()
+                if c.parent == n.node_id]
+    return {
+        "node_id": n.node_id, "name": n.name, "level": n.level,
+        "parent": n.parent, "feeder_kind": n.kind,
+        "solar_penetration_pct": n.solar_penetration_pct,
+        "accuracy": {
+            "mape_pct": n.mape_pct,
+            "bias_pct": n.bias_pct,
+            "peak_month_mape_pct": n.peak_month_mape_pct,
+            "worst_month": n.worst_month,
+            "worst_month_error_pct": n.worst_month_error_pct,
+        },
+        "bias_note": (
+            "Negative bias is systematic under-forecasting. It does not cancel "
+            "on aggregation and means the procurement position is short in "
+            "the same direction every month."),
+        "monthly": series,
+        "children": children[:30],
+        "child_count": len(children),
+    }
+
+
+@app.get("/forecasting/worst", operation_id="listWorstForecastNodes",
+         summary="The nodes whose forecasts are worst, where it matters")
+def worst_forecast_nodes(level: str = "feeder", metric: str = "mape",
+                         kind: str | None = None, limit: int = 20) -> dict:
+    """Where the forecasting effort should go.
+
+    `metric` is `mape` for scatter, `bias` for systematic error, or `peak` for
+    accuracy in the months power is bought. They identify different nodes and
+    imply different fixes — scatter usually means a missing driver, bias
+    usually means the model needs retraining, and a peak-only failure means it
+    was fitted on ordinary conditions.
+    """
+    rows = [n for n in forecasting.NODES.values()
+            if n.level == level and (kind is None or n.kind == kind)]
+    if not rows:
+        raise HTTPException(
+            404, f"No nodes at level {level}. Use state, circle, division, "
+                 f"subdivision or feeder.")
+    key = {"mape": lambda n: n.mape_pct,
+           "bias": lambda n: abs(n.bias_pct),
+           "peak": lambda n: n.peak_month_mape_pct}.get(metric)
+    if key is None:
+        raise HTTPException(400, "metric must be mape, bias or peak.")
+    rows.sort(key=key, reverse=True)
+    shown = rows[: max(1, min(limit, 100))]
+    return {
+        "level": level, "metric": metric, "kind": kind or "all",
+        "nodes_considered": len(rows),
+        "what_each_metric_implies": {
+            "mape": "scatter — usually a driver the model does not have",
+            "bias": "systematic — usually needs retraining; does not cancel upward",
+            "peak": "fitted on ordinary conditions; worst where it matters most",
+        },
+        "nodes": [
+            {"node_id": n.node_id, "name": n.name, "feeder_kind": n.kind,
+             "mape_pct": n.mape_pct, "bias_pct": n.bias_pct,
+             "peak_month_mape_pct": n.peak_month_mape_pct,
+             "worst_month": n.worst_month,
+             "worst_month_error_pct": n.worst_month_error_pct,
+             "solar_penetration_pct": n.solar_penetration_pct}
+            for n in shown
+        ],
+    }
+
+
+@app.get("/forecasting/procurement", operation_id="getProcurementView",
+         summary="What the forecast means for buying power, with the margin it justifies")
+def procurement_view(node_id: str = "ST-1") -> dict:
+    """The procurement position, and the uncertainty it should carry.
+
+    The margin here is derived from this node's own recent bias and peak error
+    rather than from a general confidence band. A forecast that has been short
+    every month does not need a symmetric margin; it needs to be corrected
+    upward and then given a margin.
+    """
+    n = forecasting.NODES.get(node_id.upper())
+    if n is None:
+        raise HTTPException(404, f"No node {node_id}.")
+    latest = forecasting.MONTHS[-1]
+    forecast = n.forecast_mwh[latest]
+    # A short position every month is a correction, not a risk band.
+    correction = -n.bias_pct / 100
+    corrected = forecast * (1 + correction)
+    margin_pct = max(n.peak_month_mape_pct, n.mape_pct)
+    return {
+        "node_id": n.node_id, "name": n.name, "level": n.level,
+        "latest_month": latest,
+        "forecast_mwh": forecast,
+        "recent_bias_pct": n.bias_pct,
+        "bias_corrected_mwh": round(corrected, 1),
+        "correction_note": (
+            "The forecast has been systematically short. Correcting for the "
+            "bias comes before adding any margin — a margin on a biased "
+            "forecast prices the same error twice on one side and not at all "
+            "on the other."),
+        "suggested_margin_pct": round(margin_pct, 2),
+        "margin_basis": (
+            f"the larger of this node's overall error ({n.mape_pct}%) and its "
+            f"peak-month error ({n.peak_month_mape_pct}%)"),
+        "procurement_band_mwh": {
+            "low": round(corrected * (1 - margin_pct / 100), 1),
+            "expected": round(corrected, 1),
+            "high": round(corrected * (1 + margin_pct / 100), 1),
+        },
+        "asymmetry_note": (
+            "The two errors do not cost the same. Over-procured power is paid "
+            "for and wasted; under-procured power is bought at peak rates or "
+            "shed. Weight the band accordingly, and say which way you weighted "
+            "it."),
+        "not_valid_for": (
+            "Load management and shedding decisions, which are taken at feeder "
+            "and DT level where the error is several times larger. This "
+            "confidence belongs to this node and must not be carried down."),
+    }
+
+
+@app.get("/forecasting/export", operation_id="exportForecastAccuracy",
+         summary="Write forecast accuracy by node to CSV and return its link")
+def forecast_export(level: str = "feeder") -> dict:
+    """Export accuracy for every node at a level."""
+    exports = Path(__file__).resolve().parent / "_exports"
+    exports.mkdir(exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    name = f"forecast-accuracy-{level}-{stamp}.csv"
+    path = exports / name
+    columns = ["node_id", "name", "level", "parent", "kind",
+               "solar_penetration_pct", "mape_pct", "bias_pct",
+               "peak_month_mape_pct", "worst_month", "worst_month_error_pct"]
+    rows = 0
+    preview: list[dict] = []
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        for n in forecasting.NODES.values():
+            if n.level != level:
+                continue
+            record = {k: getattr(n, k) for k in columns}
+            writer.writerow(record)
+            rows += 1
+            if len(preview) < 5:
+                preview.append(record)
+    return {
+        "rows": rows, "file": name,
+        "download_url": f"{PUBLIC_BASE_URL}/discom/exports/{name}",
+        "size_kb": round(path.stat().st_size / 1024, 1),
+        "columns": columns, "level": level, "preview": preview,
     }

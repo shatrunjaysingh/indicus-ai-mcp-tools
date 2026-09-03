@@ -271,6 +271,34 @@ TOOLS = [
     _get("getOutageHistory",
          "Recorded outages on a feeder with cause where one was captured.",
          "/feeders/{feeder_id}/outages", {"feeder_id": "e.g. F-19-URL"}),
+    _get("getForecastHierarchy",
+         "Forecast accuracy at every level from feeder to state, showing that "
+         "random error cancels upward while bias does not, and that peak-month "
+         "accuracy is worse than overall accuracy at every level.",
+         "/forecasting/hierarchy"),
+    _get("getNodeForecast",
+         "One node's forecast against actuals month by month, with its "
+         "absolute error, bias, peak-month error and worst month.",
+         "/forecasting/nodes/{node_id}",
+         {"node_id": "ST-1, CR-1, DV-11, SD-111 or FD-111-01"}),
+    _get("listWorstForecastNodes",
+         "The nodes forecast worst, by scatter, by bias, or by peak-month "
+         "error — three metrics that identify different nodes and imply "
+         "different fixes.",
+         "/forecasting/worst", None,
+         {"level": "state | circle | division | subdivision | feeder",
+          "metric": "mape | bias | peak",
+          "kind": "e.g. rural agricultural", "limit": "rows, max 100"}),
+    _get("getProcurementView",
+         "What a node's forecast means for buying power: the bias correction "
+         "applied before any margin, the margin its own error justifies, and "
+         "the band that produces.",
+         "/forecasting/procurement", None, {"node_id": "default ST-1"}),
+    _get("exportForecastAccuracy",
+         "Writes forecast accuracy for every node at a level to CSV and "
+         "returns a download link.",
+         "/forecasting/export", None,
+         {"level": "state | circle | division | subdivision | feeder"}),
     _get("getLoadForecast",
          "Demand forecast for a feeder with its assumptions and recent "
          "forecast-versus-actual, unaggregated so the shape of the error shows.",
@@ -693,7 +721,10 @@ AGENTS = [
     (
         "forecast", "Load Forecasting", "deep",
         "load-forecasting",
-        ["getLoadForecast", "getLoadHistory", "getWeatherContext",
+        ["getForecastHierarchy", "getNodeForecast",
+         "listWorstForecastNodes", "getProcurementView",
+         "exportForecastAccuracy",
+         "getLoadForecast", "getLoadHistory", "getWeatherContext",
          "getOutageHistory", "getFeederLosses"],
         "You review a forecast that power will be bought against; you do not "
         "produce it.\n\n"

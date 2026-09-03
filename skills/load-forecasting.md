@@ -6,6 +6,11 @@ description: >
   likely wrong, and what it means for procurement and load management. Use
   before acting on a forecast, or to explain a forecast miss after the fact.
 allowed-tools:
+  - getForecastHierarchy
+  - getNodeForecast
+  - listWorstForecastNodes
+  - getProcurementView
+  - exportForecastAccuracy
   - getLoadForecast
   - getLoadHistory
   - getWeatherContext
@@ -14,6 +19,77 @@ allowed-tools:
 ---
 
 ## Instructions
+
+### Two modes
+
+A **feeder or node id** means review that forecast — go to *One forecast*
+below.
+
+Anything else — the hierarchy, procurement, where the forecasting is worst —
+means work across levels. Start with `getForecastHierarchy`.
+
+---
+
+## Working the hierarchy
+
+State, circle, division, subdivision, feeder. **594 feeders under one state.**
+
+### The aggregate number is not the accuracy
+
+**Feeders average 6.99% absolute error. The state comes out at 2.41%.** Same
+forecasts. A feeder that ran high and one that ran low net out on the way up,
+so the aggregate looks three times better than anything underneath it.
+
+Load management and shedding are decided at feeder and DT level. Procurement is
+decided at circle and state. So the accuracy quoted in a procurement meeting is
+genuinely good and genuinely irrelevant to the people switching load — **state
+which level a figure belongs to, every time, and never carry an aggregate
+confidence downward.**
+
+### Bias does not cancel, and absolute error hides it
+
+Bias is **−2.25% at feeder level and −2.32% at state level.** Random error
+cancels upward; a systematic under-forecast survives intact.
+
+This is the finding that matters most for procurement, and no absolute-error
+measure will show it — a mean absolute percentage error of 2.41% looks
+excellent and is consistent with being short every single month. Report bias
+separately from scatter, always.
+
+### Peak accuracy is the accuracy that counts
+
+**State error is 2.41% overall and 5.79% in peak months.** A model that is good
+in ordinary conditions and poor in April to June is not a good model for
+procurement, because those are the months the power has to be bought.
+
+Say the peak figure whenever you say the overall one.
+
+### Correct the bias before adding a margin
+
+`getProcurementView` does this in the right order. A forecast short by 2.3%
+every month is corrected upward first, and *then* given a margin. Putting a
+symmetric margin on a biased forecast prices the same error twice on one side
+and not at all on the other.
+
+Say which way you weighted the band. The two errors do not cost the same:
+over-procured power is paid for and wasted, under-procured power is bought at
+peak rates or shed, and shedding in an Indian summer is a serious harm.
+
+### Where the effort goes
+
+`listWorstForecastNodes` takes a metric, and the three identify different nodes
+with different fixes: **scatter** usually means a driver the model does not
+have, **bias** usually means retraining, and a **peak-only** failure means it
+was fitted on ordinary conditions.
+
+**Rural agricultural feeders average 12.20% against urban domestic at 4.96%.**
+Their demand follows the crop calendar and the supply schedule rather than
+temperature, so a temperature-driven model has little to work with. That is a
+model-selection problem, not a tuning one.
+
+---
+
+## One forecast
 
 You review a demand forecast that power will be bought against. Over-procured
 power is paid for and wasted; under-procured means purchase at peak rates, or
