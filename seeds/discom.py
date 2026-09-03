@@ -81,6 +81,36 @@ TOOLS = [
          "TD/PD record: date, method, whether the disconnection was actually "
          "executed and acknowledged in the field, reading taken, restorations.",
          "/consumers/{consumer_no}/disconnection", _C),
+    _get("getRestorationScreening",
+         "TD accounts showing consumption after disconnection, and how many "
+         "survive scrutiny: what was excluded for estimated reads or an "
+         "unconfirmed disconnection, and how many paid just before consumption "
+         "resumed.",
+         "/restoration/screening"),
+    _get("listRestorationCases",
+         "Suspected illegal restorations ranked by risk, each with the four "
+         "figures the case rests on.",
+         "/restoration/cases", None,
+         {"min_risk": "0-100, default 70", "division": "e.g. Pune East",
+          "include_blocked": "true | false",
+          "limit": "rows to return, max 100"}),
+    _get("getRestorationCase",
+         "One suspected restoration laid out as its four figures — "
+         "disconnection, expected consumption, actual consumption, gap — with "
+         "the alternative explanations and the risk factors.",
+         "/restoration/cases/{consumer_no}", {"consumer_no": "e.g. TD-524818"}),
+    _get("buildRestorationTasks",
+         "Generates inspection task specifications for the confirmed cases, "
+         "each naming what to look for at that premises given how the "
+         "disconnection was effected. Specifications only — nothing is written "
+         "to any system of record.",
+         "/restoration/tasks", None,
+         {"limit": "tasks to return, max 100", "division": "e.g. Pune East",
+          "min_risk": "0-100, default 70"}),
+    _get("exportRestorationCases",
+         "Writes the restoration case list to CSV and returns a download link.",
+         "/restoration/export", None,
+         {"min_risk": "0-100", "include_blocked": "true | false"}),
     _get("getTDPortfolio",
          "The whole TD book: ledger outstanding against recoverable amount, "
          "expected recovery, priority bands with what each means, restoration "
@@ -441,8 +471,23 @@ AGENTS = [
     (
         "restoration", "Illegal Restoration Detection", "deep",
         "illegal-restoration-detection",
-        ["getConsumer", "getDisconnectionRecord", "getConsumptionHistory",
+        ["getRestorationScreening", "listRestorationCases",
+         "getRestorationCase", "buildRestorationTasks",
+         "exportRestorationCases",
+         "getConsumer", "getDisconnectionRecord", "getConsumptionHistory",
          "getMeterStatus", "getSiteSurvey", "getBillingHistory"],
+        "A consumer number means work that case. Anything else means work the "
+        "whole screening run — start with getRestorationScreening.\n\n"
+        "At scale, give the apparent count and the surviving count together. "
+        "Eleven thousand accounts show consumption after disconnection and "
+        "about two thousand warrant an inspection; reporting the first as the "
+        "finding sends enforcement teams to thousands of people who did "
+        "nothing.\n\n"
+        "Account for the difference every time: provisional bills raised for "
+        "disconnected consumers are not consumption, a disconnection with no "
+        "field acknowledgement may never have happened, and a payment just "
+        "before consumption resumed points at an authorised restoration the "
+        "ledger has not caught up with.\n\n"
         "You decide whether post-disconnection consumption is unauthorised "
         "restoration or the utility's own record being wrong.\n\n"
         "Give four figures every time: disconnection date and method, expected "

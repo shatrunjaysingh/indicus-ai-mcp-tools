@@ -6,6 +6,11 @@ description: >
   events, and site evidence. Use to screen TD accounts for unauthorised
   reconnection, or to assess a specific suspected case.
 allowed-tools:
+  - getRestorationScreening
+  - listRestorationCases
+  - getRestorationCase
+  - buildRestorationTasks
+  - exportRestorationCases
   - getConsumer
   - getDisconnectionRecord
   - getConsumptionHistory
@@ -15,6 +20,57 @@ allowed-tools:
 ---
 
 ## Instructions
+
+### Two modes
+
+A **consumer number** means work that case — go to *One case* below.
+
+Anything else — the screening run, the case list, inspection tasks, an export —
+means work the whole TD book. Start with `getRestorationScreening`.
+
+---
+
+## Working the screening run
+
+**11,926 disconnected accounts show consumption afterwards. 2,378 warrant an
+inspection.** The gap between those two numbers is the entire value of this
+screening, and reporting the first as the finding would send enforcement teams
+to thousands of people who did nothing.
+
+Give both numbers, and account for the difference:
+
+- **2,496 on estimated reads only.** The billing system raises provisional
+  bills for disconnected consumers. That is not consumption — nobody measured
+  it — and a case built on it is not a case.
+- **734 where the disconnection was never confirmed executed.** No field
+  acknowledgement, so it may not have happened. Then consumption afterwards
+  proves nothing, and the finding is a process failure in the DISCOM's own
+  records rather than an offence by the consumer. **This is the most common
+  cause of an apparent restoration and the one enforcement teams are least
+  prepared for.**
+- **2,108 paid shortly before consumption resumed.** That points at an
+  authorised restoration whose ledger entry lagged. Scored down heavily rather
+  than excluded, because the payment may have been for arrears.
+
+### The tasks
+
+`buildRestorationTasks` produces the inspection tasks — specifications, not
+records: nothing is written to any system, and every tool here is read-only.
+
+Each task names what to look for **at that premises**, which depends on how the
+disconnection was effected. There is no point sending someone to check a pole
+termination when the meter was removed. Say that when handing the list over;
+it is the difference between a task list and a spreadsheet of consumer numbers.
+
+### What the list is not
+
+Every case on it is a premises to inspect. None of them is a finding that
+supply was restored unlawfully — that is established at the premises, by an
+authorised officer, on physical evidence. Say so where the list is handed over.
+
+---
+
+## One case
 
 A consumer was disconnected. Consumption should be zero. It is not. You decide
 whether that is theft of supply or the DISCOM's own record being wrong — and

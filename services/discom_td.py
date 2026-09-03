@@ -88,6 +88,17 @@ class TDAccount:
     recovery_priority: int = 0
     factors: dict = field(default_factory=dict)
     pd_recommended: bool = False
+    # --- illegal restoration (use case 5) ---------------------------------
+    # Whether the consumption after disconnection is an actual meter read or a
+    # provisional bill. A case built on estimated reads is not a case, and the
+    # billing system generates them for disconnected consumers routinely.
+    consumption_basis: str = "actual"
+    restart_period: str | None = None
+    pre_td_monthly_avg: int = 0
+    payment_near_restart: bool = False
+    restoration_risk: int = 0
+    restoration_factors: dict = field(default_factory=dict)
+    restoration_blocked_by: str | None = None
 
 
 def _recoverable(a: TDAccount) -> float:
@@ -187,6 +198,70 @@ def _priority(recoverable: float, probability: float) -> int:
     return int(round(lo / len(_PERCENTILES) * 100))
 
 
+def _restoration_risk(a: TDAccount) -> tuple[int, dict, str | None]:
+    """Risk that supply was restored without authorisation, 0-100.
+
+    The four figures the case rests on are the disconnection date, the expected
+    consumption, the actual consumption after it, and the gap. Everything below
+    is about what could explain that gap other than someone reconnecting.
+
+    Two conditions cap the score outright rather than reducing it, because they
+    do not make restoration less likely — they make the *case* unavailable:
+
+    A disconnection with no field acknowledgement may never have happened. Then
+    consumption afterwards proves nothing, there is no offence, and the finding
+    is a process failure in the DISCOM's own records.
+
+    Consumption on estimated reads is not consumption. The billing system
+    generates provisional bills for disconnected consumers, and a screening run
+    that counts them accuses people of using power that nobody measured.
+    """
+    if a.consumption_after_td_kwh <= 0:
+        return 0, {}, None
+
+    blocked = None
+    if not a.executed_and_acknowledged:
+        blocked = "disconnection not confirmed executed in the field"
+    elif a.consumption_basis == "estimated":
+        blocked = "consumption is provisional billing, not an actual read"
+
+    f: dict[str, float] = {}
+    # Size of the gap against what the premises used before. Resuming at close
+    # to the old level is the signature of a physical reconnection; a trickle
+    # is more consistent with a metering or reading error.
+    if a.pre_td_monthly_avg > 0:
+        ratio = a.consumption_after_td_kwh / a.pre_td_monthly_avg
+        f["consumption_vs_pre_td"] = round(min(1.0, ratio) * 46, 1)
+    else:
+        f["consumption_vs_pre_td"] = 20.0
+
+    f["confirmed_execution"] = 18.0 if a.executed_and_acknowledged else 0.0
+    f["actual_read"] = 14.0 if a.consumption_basis == "actual" else 0.0
+
+    f["site_evidence"] = {
+        "occupied_trading": 16.0, "occupied_residential": 12.0,
+        "not_surveyed": 0.0, "locked_vacant": -14.0,
+        "premises_demolished": -20.0,
+    }[a.survey_finding]
+
+    # Meter removed at disconnection and consumption recorded since is close to
+    # impossible without interference; in-situ metering can drift or be misread.
+    f["meter_state"] = {"removed": 10.0, "missing": 8.0, "tampered": 9.0,
+                        "burnt": 2.0, "in_situ_sealed": 0.0}[a.meter_status]
+
+    # A payment just before consumption resumes points hard at an authorised
+    # restoration the ledger has not caught up with.
+    if a.payment_near_restart:
+        f["payment_before_restart"] = -34.0
+
+    score = int(round(max(0.0, min(100.0, sum(f.values())))))
+    if blocked:
+        # Capped, not zeroed: it is still worth looking at, but it cannot carry
+        # an enforcement action until the blocking fact is resolved.
+        score = min(score, 30)
+    return score, {k: v for k, v in f.items() if v}, blocked
+
+
 def _generate() -> tuple[list[TDAccount], dict]:
     rng = random.Random(SEED)
     cats = list(CATEGORIES)
@@ -202,6 +277,9 @@ def _generate() -> tuple[list[TDAccount], dict]:
         "accounts": 0, "outstanding": 0.0, "recoverable": 0.0, "expected": 0.0,
         "restoration_suspected": 0, "never_surveyed": 0, "pd_recommended": 0,
         "by_band": {"85-100": 0, "60-84": 0, "35-59": 0, "15-34": 0, "0-14": 0},
+        "restoration": {"with_consumption": 0, "risk_70_plus": 0,
+                        "blocked_execution": 0, "blocked_estimated": 0,
+                        "payment_near_restart": 0},
         "by_division": {d: {"accounts": 0, "recoverable": 0.0, "expected": 0.0}
                         for d in DIVISIONS},
     }
@@ -242,8 +320,18 @@ def _generate() -> tuple[list[TDAccount], dict]:
             notices_served=notices, notices_responded=responded,
             statute_barred_amount=barred, disputed_amount=disputed,
         )
+        a.pre_td_monthly_avg = rng.randint(180, 1600)
+        a.consumption_basis = (
+            "estimated" if consumption > 0 and rng.random() < 0.22 else "actual")
+        a.restart_period = (
+            f"2026-{rng.randint(1, 8):02d}" if consumption > 0 else None)
+        # An authorised reconnection whose ledger entry lagged. Common enough
+        # that a screening run which ignores it accuses paying consumers.
+        a.payment_near_restart = consumption > 0 and rng.random() < 0.17
         a.recoverable_amount = _recoverable(a)
         a.recovery_probability, a.factors = _probability(a)
+        (a.restoration_risk, a.restoration_factors,
+         a.restoration_blocked_by) = _restoration_risk(a)
         built.append(a)
 
     # The distribution has to exist before anything can be a percentile of it.
@@ -272,6 +360,17 @@ def _generate() -> tuple[list[TDAccount], dict]:
                 "35-59" if a.recovery_priority >= 35 else
                 "15-34" if a.recovery_priority >= 15 else "0-14")
         agg["by_band"][band] += 1
+        if a.consumption_after_td_kwh > 0:
+            r = agg["restoration"]
+            r["with_consumption"] += 1
+            if a.restoration_risk >= 70:
+                r["risk_70_plus"] += 1
+            if a.restoration_blocked_by and "executed" in a.restoration_blocked_by:
+                r["blocked_execution"] += 1
+            if a.restoration_blocked_by and "provisional" in a.restoration_blocked_by:
+                r["blocked_estimated"] += 1
+            if a.payment_near_restart:
+                r["payment_near_restart"] += 1
         d = agg["by_division"][a.division]
         d["accounts"] += 1
         d["recoverable"] += a.recoverable_amount
@@ -287,7 +386,7 @@ def _generate() -> tuple[list[TDAccount], dict]:
 
 
 def _load() -> tuple[list[TDAccount], dict]:
-    key = f"{SEED}-{POPULATION}-{MATERIALISE}-v2-pct"
+    key = f"{SEED}-{POPULATION}-{MATERIALISE}-v3-restoration"
     cache = Path(__file__).resolve().parent / "_td_cache.json"
     if cache.exists():
         try:

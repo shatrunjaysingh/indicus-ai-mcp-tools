@@ -1546,3 +1546,235 @@ def survey_export(status: str | None = None, needs_human: bool = False) -> dict:
         "filters_applied": {"status": status or "all", "needs_human": needs_human},
         "preview": preview,
     }
+
+
+# --- illegal restoration screening -----------------------------------------
+# Use case 5. Screens the TD book for supply restored without authorisation and
+# generates the inspection tasks.
+
+@app.get("/restoration/screening", operation_id="getRestorationScreening",
+         summary="TD accounts showing consumption after disconnection, screened")
+def restoration_screening() -> dict:
+    """How many apparent restorations there are, and how many survive scrutiny.
+
+    The gap between those two numbers is the whole value. Consumption after a
+    disconnection looks like an offence and usually is not: the billing system
+    generates provisional bills for disconnected consumers, disconnection
+    orders get closed without being executed, and consumers pay for
+    restorations the ledger has not caught up with.
+
+    A screening run that reports the first number as its finding sends
+    enforcement teams to thousands of people who did nothing.
+    """
+    r = td.TOTALS["restoration"]
+    clean = r["with_consumption"] - r["blocked_estimated"] - r["blocked_execution"]
+    return {
+        "td_book": td.TOTALS["accounts"],
+        "consumption_after_disconnection": r["with_consumption"],
+        "inspection_worthy_risk_70_plus": r["risk_70_plus"],
+        "excluded": {
+            "estimated_reads_only": r["blocked_estimated"],
+            "disconnection_execution_unconfirmed": r["blocked_execution"],
+        },
+        "flagged_but_paid_near_restart": r["payment_near_restart"],
+        "after_exclusions": clean,
+        "why_excluded": {
+            "estimated_reads_only": (
+                "The billing system raises provisional bills for disconnected "
+                "consumers. That is not consumption; nobody measured it, and a "
+                "case built on it is not a case."),
+            "disconnection_execution_unconfirmed": (
+                "No field acknowledgement, so the disconnection may never have "
+                "happened. Then consumption afterwards proves nothing and the "
+                "finding is a process failure in the DISCOM's own records, not "
+                "an offence by the consumer."),
+            "flagged_but_paid_near_restart": (
+                "A payment shortly before consumption resumes points at an "
+                "authorised restoration whose ledger entry lagged. Scored down "
+                "heavily rather than excluded, because the payment may have "
+                "been for arrears rather than reconnection."),
+        },
+        "scoring_note": (
+            "Risk is capped at 30 where execution is unconfirmed or the reads "
+            "are estimated — capped rather than zeroed, because the case is "
+            "still worth resolving, just not by sending an enforcement team."
+        ),
+    }
+
+
+@app.get("/restoration/cases", operation_id="listRestorationCases",
+         summary="Suspected illegal restorations, ranked by risk")
+def restoration_cases(min_risk: int = 70, division: str | None = None,
+                      include_blocked: bool = False, limit: int = 20) -> dict:
+    """The ranked case list, with the four figures each case rests on."""
+    rows = [
+        a for a in td.RANKED
+        if a.consumption_after_td_kwh > 0
+        and a.restoration_risk >= min_risk
+        and (include_blocked or not a.restoration_blocked_by)
+        and (division is None or a.division == division)
+    ]
+    rows.sort(key=lambda a: a.restoration_risk, reverse=True)
+    shown = rows[: max(1, min(limit, 100))]
+    return {
+        "matched": len(rows),
+        "filters_applied": {"min_risk": min_risk, "division": division or "all",
+                            "include_blocked": include_blocked},
+        "cases": [
+            {"consumer_no": a.consumer_no, "division": a.division,
+             "restoration_risk": a.restoration_risk,
+             "disconnected_on_day": a.td_days,
+             "expected_consumption": 0,
+             "actual_consumption_kwh": a.consumption_after_td_kwh,
+             "pre_td_monthly_avg": a.pre_td_monthly_avg,
+             "consumption_basis": a.consumption_basis,
+             "restart_period": a.restart_period,
+             "execution_confirmed": a.executed_and_acknowledged,
+             "meter_status": a.meter_status,
+             "survey_finding": a.survey_finding,
+             "payment_near_restart": a.payment_near_restart,
+             "blocked_by": a.restoration_blocked_by}
+            for a in shown
+        ],
+    }
+
+
+@app.get("/restoration/cases/{consumer_no}", operation_id="getRestorationCase",
+         summary="One suspected restoration: the four figures and the factors")
+def restoration_case(consumer_no: str) -> dict:
+    """One case, laid out as the four figures it rests on.
+
+    Disconnection, expected consumption, actual consumption, and the gap. Every
+    restoration report is those four numbers plus what else could explain them.
+    """
+    a = td.BY_NO.get(consumer_no.upper())
+    if a is None:
+        raise HTTPException(404, f"No TD account {consumer_no}.")
+    gap = a.consumption_after_td_kwh
+    return {
+        "consumer_no": a.consumer_no, "division": a.division,
+        "restoration_risk": a.restoration_risk,
+        "the_four_figures": {
+            "disconnected_days_ago": a.td_days,
+            "expected_consumption_kwh": 0,
+            "actual_consumption_kwh": a.consumption_after_td_kwh,
+            "gap_kwh": gap,
+            "gap_as_share_of_pre_td_normal": (
+                round(gap / a.pre_td_monthly_avg, 2)
+                if a.pre_td_monthly_avg else None),
+        },
+        "consumption_basis": a.consumption_basis,
+        "restart_period": a.restart_period,
+        "execution": {
+            "confirmed_and_acknowledged": a.executed_and_acknowledged,
+            "note": ("Without a field acknowledgement the disconnection may "
+                     "never have happened, and there is no offence to find."),
+        },
+        "alternative_explanations": {
+            "payment_near_restart": a.payment_near_restart,
+            "estimated_reads": a.consumption_basis == "estimated",
+            "meter_status": a.meter_status,
+            "survey_finding": a.survey_finding,
+        },
+        "risk_factors": a.restoration_factors,
+        "blocked_by": a.restoration_blocked_by,
+    }
+
+
+@app.get("/restoration/tasks", operation_id="buildRestorationTasks",
+         summary="Generate inspection tasks for the confirmed restoration cases")
+def restoration_tasks(limit: int = 50, division: str | None = None,
+                      min_risk: int = 70) -> dict:
+    """The inspection tasks this screening would raise.
+
+    Returns the task specifications rather than creating them. Every tool in
+    this service is read-only: an agent that can write work orders into the
+    systems of record is a demo of something nobody should deploy, and the task
+    list is just as useful handed to whoever does raise them.
+
+    Each task says what to look for at that specific premises, which depends on
+    how the disconnection was effected — there is no point sending someone to
+    check a pole termination when the meter was removed.
+    """
+    rows = [
+        a for a in td.RANKED
+        if a.consumption_after_td_kwh > 0
+        and a.restoration_risk >= min_risk
+        and not a.restoration_blocked_by
+        and (division is None or a.division == division)
+    ]
+    rows.sort(key=lambda a: a.restoration_risk, reverse=True)
+    shown = rows[: max(1, min(limit, 100))]
+    tasks = []
+    for a in shown:
+        look_for = ["the service cable between the pole and the premises",
+                    "the meter terminal chamber and its seal"]
+        if a.meter_status == "removed":
+            look_for = ["a meter installed since removal, or a direct "
+                        "connection where the meter was",
+                        "the service position at the pole"]
+        elif a.meter_status == "missing":
+            look_for.insert(0, "whether any meter is present at all")
+        tasks.append({
+            "task_type": "RESTORATION_INSPECTION",
+            "consumer_no": a.consumer_no,
+            "division": a.division, "subdivision": a.subdivision,
+            "priority": "urgent" if a.restoration_risk >= 85 else "routine",
+            "restoration_risk": a.restoration_risk,
+            "basis": (f"{a.consumption_after_td_kwh} kWh recorded on actual "
+                      f"reads after a confirmed disconnection {a.td_days} days "
+                      f"ago; expected 0"),
+            "look_for": look_for,
+            "note": ("Confirm before assessing. This is a case to inspect, "
+                     "not a finding that supply was restored unlawfully."),
+        })
+    return {
+        "tasks_generated": len(tasks),
+        "matched": len(rows),
+        "filters_applied": {"min_risk": min_risk, "division": division or "all"},
+        "tasks": tasks,
+        "note": ("Task specifications only — nothing was written to any system "
+                 "of record. Every tool here is read-only."),
+    }
+
+
+@app.get("/restoration/export", operation_id="exportRestorationCases",
+         summary="Write the restoration case list to CSV and return its link")
+def restoration_export(min_risk: int = 70, include_blocked: bool = False) -> dict:
+    """Export the case list. The rows do not come back through this call."""
+    exports = Path(__file__).resolve().parent / "_exports"
+    exports.mkdir(exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    name = f"restoration-cases-{stamp}.csv"
+    path = exports / name
+    columns = ["consumer_no", "division", "subdivision", "restoration_risk",
+               "td_days", "consumption_after_td_kwh", "pre_td_monthly_avg",
+               "consumption_basis", "restart_period",
+               "executed_and_acknowledged", "meter_status", "survey_finding",
+               "payment_near_restart", "restoration_blocked_by", "outstanding"]
+    rows = 0
+    preview: list[dict] = []
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        for a in td.stream_book():
+            if a.consumption_after_td_kwh <= 0:
+                continue
+            if a.restoration_risk < min_risk:
+                continue
+            if not include_blocked and a.restoration_blocked_by:
+                continue
+            record = {c: getattr(a, c) for c in columns}
+            writer.writerow(record)
+            rows += 1
+            if len(preview) < 5:
+                preview.append(record)
+    return {
+        "rows": rows, "file": name,
+        "download_url": f"{PUBLIC_BASE_URL}/discom/exports/{name}",
+        "size_kb": round(path.stat().st_size / 1024, 1),
+        "columns": columns,
+        "filters_applied": {"min_risk": min_risk,
+                            "include_blocked": include_blocked},
+        "preview": preview,
+    }
