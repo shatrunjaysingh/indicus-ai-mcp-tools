@@ -123,6 +123,37 @@ TOOLS = [
          "Image-analysis detections and OCR from survey photographs, each with "
          "a confidence, plus what the images did not capture.",
          "/surveys/{consumer_no}/images", _C),
+    _get("getAnomalyScreening",
+         "The screening run across the metered base: recommendation bands, "
+         "inspection capacity against what was flagged, how many anomalies "
+         "had a documented cause and how many of those would otherwise have "
+         "been inspected, and the random-versus-targeted inspection history.",
+         "/screening/portfolio"),
+    _get("listInspectionTargets",
+         "Consumers ranked by anomaly risk with the signals that fired, "
+         "filterable by risk, division, and whether physical evidence exists.",
+         "/screening/accounts", None,
+         {"min_risk": "0-100", "division": "e.g. Pune East",
+          "physical_evidence_only": "true | false",
+          "limit": "rows to return, max 100"}),
+    _get("getAnomalyRiskScore",
+         "One consumer's anomaly risk with each signal's contribution, any "
+         "documented explanation, and the feeder context that was deliberately "
+         "not scored.",
+         "/screening/accounts/{consumer_no}", {"consumer_no": "e.g. MS-801023"}),
+    _get("buildInspectionPlan",
+         "Selects the consumers an enforcement wing should inspect this month, "
+         "sized to capacity, excluding anything with a documented explanation. "
+         "This is the working list.",
+         "/screening/inspection-plan", None,
+         {"capacity": "inspections; defaults to the monthly capacity",
+          "division": "e.g. Pune East", "min_risk": "0-100, default 45"}),
+    _get("exportInspectionList",
+         "Writes the ranked inspection list to CSV and returns the row count "
+         "and a download link. The rows do not come back through the call.",
+         "/screening/export", None,
+         {"min_risk": "0-100", "division": "e.g. Pune East",
+          "include_documented": "true | false"}),
     _get("getPeerBenchmark",
          "Consumption of comparable consumers as a distribution with cohort "
          "size — the weakest evidence in an anomaly case, returned so its "
@@ -324,10 +355,23 @@ AGENTS = [
     ),
     (
         "theft", "Theft/Anomaly Detection", "deep", "theft-anomaly-detection",
-        ["getConsumer", "getConsumptionHistory", "getMeterStatus",
+        ["getAnomalyScreening", "listInspectionTargets", "getAnomalyRiskScore",
+         "buildInspectionPlan", "exportInspectionList",
+         "getConsumer", "getConsumptionHistory", "getMeterStatus",
          "getPeerBenchmark", "getBillingHistory", "getSiteSurvey",
          "getFeederLosses"],
+        "A consumer number means build the case on that consumer. Anything "
+        "else means work the whole screening run — start with "
+        "getAnomalyScreening.\n\n"
         "You build a case for inspection, never a finding of theft.\n\n"
+        "At scale, lead with what the documentation check is worth: thousands "
+        "of anomalous profiles have a recorded cause, and saying how many "
+        "would otherwise have been inspected is the difference between "
+        "intelligence-led inspection and an automated harassment "
+        "programme.\n\n"
+        "Feeder loss is area context and is not an input to any consumer's "
+        "score. Never cite it against an individual — a consumer on a lossy "
+        "feeder has neighbours.\n\n"
         "For every pattern you rely on, name the innocent explanation and say "
         "how you excluded it. Check getConsumptionHistory for a recorded load "
         "change before treating any drop as suspicious — a documented load "

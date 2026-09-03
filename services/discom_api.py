@@ -16,6 +16,7 @@ from __future__ import annotations
 import discom_data as data
 import discom_portfolio as portfolio
 import discom_td as td
+import discom_theft as theft
 import csv
 import os
 from datetime import UTC, datetime
@@ -1123,4 +1124,234 @@ def td_export(min_priority: int = 0, division: str | None = None,
                             "pd_candidates_only": pd_candidates_only},
         "preview": preview,
         "note": "Full list in the file. Do not ask for the rows in chat.",
+    }
+
+
+# --- anomaly screening -----------------------------------------------------
+# Use case 3. The per-consumer theft tools above build a case against one
+# consumer; these decide which 1,800 of 250,000 an enforcement wing looks at.
+
+@app.get("/screening/portfolio", operation_id="getAnomalyScreening",
+         summary="Anomaly screening across the metered base, with inspection bands")
+def screening() -> dict:
+    """The screening run: how many consumers each recommendation band holds.
+
+    `suppressed_by_documentation` is the number worth reading twice. Those are
+    consumers whose anomalous profile has a recorded cause — a sanctioned load
+    surrender, an approved shutdown, a meter changed on a work order — and
+    `would_have_been_flagged` is how many of them an undocumented screening run
+    would have sent enforcement teams to. They filed the right paperwork.
+    """
+    t = theft.TOTALS
+    inspect = t["by_action"]["INSPECT_URGENT"] + t["by_action"]["INSPECT_ROUTINE"]
+    return {
+        "screened": t["screened"],
+        "recommendation_bands": t["by_action"],
+        "band_meaning": {
+            "INSPECT_URGENT": "70-100: physical or metering evidence, multiple signals",
+            "INSPECT_ROUTINE": "45-69: worth a visit, evidence not yet physical",
+            "METER_TEST": "25-44: consistent with a defective meter; test before accusing",
+            "MONITOR": "10-24: one weak signal",
+            "NO_ACTION": "0-9",
+        },
+        "flagged_for_inspection": inspect,
+        "inspection_capacity_per_month": theft.INSPECTION_CAPACITY_PER_MONTH,
+        "capacity_gap": inspect - theft.INSPECTION_CAPACITY_PER_MONTH,
+        "suppressed_by_documentation": t["suppressed_by_documentation"],
+        "would_have_been_flagged_without_that_check": t["would_have_been_flagged"],
+        "physical_evidence": {
+            "bypass_indicator": t["bypass_indicator"],
+            "repeated_tampering": t["repeated_tampering"],
+        },
+        "by_division": t["by_division"],
+        "inspection_history": theft.INSPECTION_HISTORY,
+        "scoring_note": (
+            "Feeder and DT loss are NOT inputs to any consumer's score. Loss "
+            "locates an area; it says nothing about which consumer on the "
+            "feeder is responsible. It is available as context from "
+            "getFeederLosses and must not be cited against an individual."
+        ),
+    }
+
+
+@app.get("/screening/accounts", operation_id="listInspectionTargets",
+         summary="Consumers ranked by anomaly risk, for intelligence-led inspection")
+def screening_targets(min_risk: int = 0, division: str | None = None,
+                      physical_evidence_only: bool = False,
+                      limit: int = 20) -> dict:
+    """The ranked inspection list.
+
+    `physical_evidence_only` restricts to bypass indications and repeated
+    tampering — the cases where the evidence is a thing at the premises rather
+    than a pattern in a spreadsheet.
+    """
+    rows = [
+        c for c in theft.RANKED
+        if c.anomaly_risk >= min_risk
+        and (division is None or c.division == division)
+        and (not physical_evidence_only
+             or c.bypass_indicator or c.tamper_events_12m >= 2)
+    ]
+    shown = rows[: max(1, min(limit, 100))]
+    return {
+        "matched": len(rows),
+        "filters_applied": {
+            "min_risk": min_risk, "division": division or "all",
+            "physical_evidence_only": physical_evidence_only,
+        },
+        "accounts": [
+            {"consumer_no": c.consumer_no, "division": c.division,
+             "subdivision": c.subdivision, "category": c.category,
+             "anomaly_risk": c.anomaly_risk, "recommended": c.recommended,
+             "signals_fired": c.signals_fired,
+             "connected_load_kw": c.connected_load_kw,
+             "sanctioned_load_kw": c.sanctioned_load_kw,
+             "documented_reason": c.documented_reason}
+            for c in shown
+        ],
+    }
+
+
+@app.get("/screening/accounts/{consumer_no}", operation_id="getAnomalyRiskScore",
+         summary="One consumer's anomaly risk and the signals behind it")
+def screening_score(consumer_no: str) -> dict:
+    """The score with each signal's contribution.
+
+    `signal_scores` shows what each pattern added. Peer deviation is capped
+    low on purpose: a case resting on "consumes less than similar consumers"
+    cannot reach the inspection band alone, because peer cohorts are never
+    truly comparable and a score that let them dominate would send inspectors
+    to households with small families and efficient appliances.
+    """
+    c = theft.BY_NO.get(consumer_no.upper())
+    if c is None:
+        raise HTTPException(
+            404, f"No screened consumer {consumer_no} in the ranked list.")
+    return {
+        "consumer_no": c.consumer_no, "division": c.division,
+        "subdivision": c.subdivision, "category": c.category,
+        "anomaly_risk": c.anomaly_risk,
+        "recommended": c.recommended,
+        "signals_fired": c.signals_fired,
+        "signal_scores": c.signal_scores,
+        "documented_reason": c.documented_reason,
+        "suppressed_by": c.suppressed_by,
+        "risk_before_suppression": c.risk_before_suppression,
+        "inputs": {
+            "consumption_drop_pct": c.consumption_drop_pct,
+            "load_factor_ratio": c.load_factor_ratio,
+            "tamper_events_12m": c.tamper_events_12m,
+            "night_day_ratio": c.night_day_ratio,
+            "peer_deviation_pct": c.peer_deviation_pct,
+            "bypass_indicator": c.bypass_indicator,
+            "connected_load_kw": c.connected_load_kw,
+            "sanctioned_load_kw": c.sanctioned_load_kw,
+        },
+        "area_context_not_scored": {
+            "feeder": c.feeder, "feeder_loss_pct": c.feeder_loss_pct,
+            "note": ("Feeder loss did not contribute to this score and must "
+                     "not be cited as evidence against this consumer."),
+        },
+    }
+
+
+@app.get("/screening/inspection-plan", operation_id="buildInspectionPlan",
+         summary="Select the consumers an enforcement wing should inspect this month")
+def inspection_plan(capacity: int = 0, division: str | None = None,
+                    min_risk: int = 45) -> dict:
+    """The month's inspection list, sized to enforcement capacity.
+
+    Excludes anything with a documented explanation, and says how many that
+    was — the count is the difference between intelligence-led inspection and
+    an automated harassment programme.
+    """
+    cap = capacity if capacity > 0 else theft.INSPECTION_CAPACITY_PER_MONTH
+    if cap > theft.INSPECTION_CAPACITY_PER_MONTH:
+        raise HTTPException(
+            400,
+            f"Inspection capacity is {theft.INSPECTION_CAPACITY_PER_MONTH:,} "
+            f"per month; {cap:,} was requested.")
+    pool = [
+        c for c in theft.RANKED
+        if c.anomaly_risk >= min_risk
+        and not c.suppressed_by
+        and (division is None or c.division == division)
+    ]
+    selected = pool[:cap]
+    from collections import Counter
+    hit = theft.INSPECTION_HISTORY[-1]["hit_rate"]
+    return {
+        "screened": theft.TOTALS["screened"],
+        "selected": len(selected),
+        "capacity_used": f"{len(selected):,} of {theft.INSPECTION_CAPACITY_PER_MONTH:,}",
+        "risk_range": (f"{selected[-1].anomaly_risk}-{selected[0].anomaly_risk}"
+                       if selected else "none"),
+        "cost": round(len(selected) * theft.INSPECTION_COST, 2),
+        "excluded_documented": theft.TOTALS["suppressed_by_documentation"],
+        "with_physical_evidence": sum(
+            1 for c in selected if c.bypass_indicator or c.tamper_events_12m >= 2),
+        "signal_mix": dict(Counter(
+            k for c in selected for k in c.signal_scores).most_common()),
+        "expected_hit_rate_from_pilot": hit,
+        "expected_findings": int(len(selected) * hit),
+        "comparison": (
+            f"Random inspection found something in 6.7% of visits. The "
+            f"score-led pilot found something in {hit * 100:.1f}%."),
+        "sample": [
+            {"consumer_no": c.consumer_no, "anomaly_risk": c.anomaly_risk,
+             "recommended": c.recommended, "signals_fired": c.signals_fired}
+            for c in selected[:10]
+        ],
+        "caveat": (
+            "This is a list of consumers to look at. It is not a finding of "
+            "theft against any of them, and none of these scores establishes "
+            "one — that is done at the premises by an authorised officer."
+        ),
+    }
+
+
+@app.get("/screening/export", operation_id="exportInspectionList",
+         summary="Write the ranked inspection list to CSV and return its link")
+def screening_export(min_risk: int = 45, division: str | None = None,
+                     include_documented: bool = False) -> dict:
+    """Export the ranked screening list. The rows do not come back here."""
+    exports = Path(__file__).resolve().parent / "_exports"
+    exports.mkdir(exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    name = f"inspection-list-{stamp}.csv"
+    path = exports / name
+    columns = [
+        "consumer_no", "division", "subdivision", "category", "anomaly_risk",
+        "recommended", "consumption_drop_pct", "load_factor_ratio",
+        "tamper_events_12m", "night_day_ratio", "peer_deviation_pct",
+        "bypass_indicator", "connected_load_kw", "sanctioned_load_kw",
+        "documented_reason", "risk_before_suppression",
+    ]
+    rows = 0
+    preview: list[dict] = []
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        for c in theft.stream_book():
+            if c.anomaly_risk < min_risk:
+                continue
+            if division and c.division != division:
+                continue
+            if not include_documented and c.suppressed_by:
+                continue
+            record = {k: getattr(c, k) for k in columns}
+            writer.writerow(record)
+            rows += 1
+            if len(preview) < 5:
+                preview.append(record)
+    return {
+        "rows": rows, "file": name,
+        "download_url": f"{PUBLIC_BASE_URL}/discom/exports/{name}",
+        "size_kb": round(path.stat().st_size / 1024, 1),
+        "columns": columns,
+        "filters_applied": {"min_risk": min_risk, "division": division or "all",
+                            "include_documented": include_documented},
+        "preview": preview,
+        "note": ("Full list in the file. Every row is a consumer to look at, "
+                 "not a consumer who has stolen anything."),
     }

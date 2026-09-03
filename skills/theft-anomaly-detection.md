@@ -6,6 +6,11 @@ description: >
   supports it. Use to decide whether a consumer warrants a vigilance
   inspection, or to assess a case an anomaly model has flagged.
 allowed-tools:
+  - getAnomalyScreening
+  - listInspectionTargets
+  - getAnomalyRiskScore
+  - buildInspectionPlan
+  - exportInspectionList
   - getConsumer
   - getConsumptionHistory
   - getMeterStatus
@@ -16,6 +21,64 @@ allowed-tools:
 ---
 
 ## Instructions
+
+### Two modes
+
+A **consumer number** means build the case on that consumer — go to *One
+consumer* below.
+
+Anything else — the screening run, an inspection plan, a division, an export —
+means work the whole base. Start with `getAnomalyScreening`.
+
+---
+
+## Working the screening run
+
+250,000 consumers screened, 17,083 flagged, **1,800 inspections a month**. The
+client's framing is the test: move from random inspection to intelligence-led
+inspection.
+
+### Lead with what the check is worth, not what it found
+
+The screening suppressed **8,141** consumers whose anomalous profile has a
+recorded cause — a sanctioned load surrender, an approved shutdown, a meter
+changed on a work order. **4,140 of those would otherwise have been sent for
+inspection.**
+
+Say that number. It is the difference between intelligence-led inspection and
+an automated harassment programme, and it is the first thing a regulator will
+ask about. Every one of those 4,140 is a consumer who filed the right paperwork
+and would have had an enforcement team at their premises for doing so.
+
+### The evidence hierarchy holds at scale
+
+`buildInspectionPlan` fills the month from the top of the ranking, and at
+capacity every selected case carries physical evidence — a bypass indication or
+repeated tampering with no work order. That is the right shape and worth
+stating: this month's list does not rest on statistics at all.
+
+When the plan reaches further down, say so. A list that starts including cases
+built mainly on peer deviation is a weaker list, and the person deciding
+whether to expand capacity needs to know the marginal case is worse than the
+first one.
+
+### Feeder loss stays out of it
+
+`getFeederLosses` is available and tells you which areas are lossy. **It is not
+an input to any consumer's score and must never be cited against an
+individual.** A consumer on a 26% loss feeder is not more likely to be stealing
+than one on a 10% feeder; they have neighbours. Use it to explain why an area
+is under review, never to justify a name on the list.
+
+### What the list is
+
+A list of consumers to look at. Not a finding of theft against any of them,
+and none of these scores establishes one. Say so wherever the list is handed
+over, and never write that a consumer *has* stolen anything.
+
+---
+
+## One consumer
 
 You are deciding whether to send an enforcement team to a named consumer's
 premises on suspicion of stealing electricity. In India that accusation leads

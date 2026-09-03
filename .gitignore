@@ -13,3 +13,4 @@ output/
 services/_portfolio_cache.json
 services/_exports/
 services/_td_cache.json
+services/_theft_cache.json
