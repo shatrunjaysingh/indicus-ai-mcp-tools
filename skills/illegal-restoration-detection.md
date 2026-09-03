@@ -1877,3 +1877,25 @@ point at the file for the rest.
 
 Say what the file contains and which filters produced it. An export whose
 selection nobody can reconstruct is not evidence of anything.
+
+## What the finding is, legally
+
+Unauthorised restoration of supply after disconnection is potentially **theft
+under §135 of the Electricity Act 2003** — a criminal matter, with a burden of
+proof and consequences for a named person that a billing dispute does not
+carry.
+
+That is exactly why the exclusions in this skill are not a formality:
+
+* **Provisional billing is not consumption.** Nobody measured that power.
+* **A disconnection with no field acknowledgement may never have happened.**
+  Then there is no offence at all, and the finding is a process failure in the
+  utility's own records.
+* **A payment shortly before consumption resumed** points at an authorised
+  restoration whose ledger entry lagged.
+
+Every case on the list is a premises to inspect. **None of them is a finding
+that supply was restored unlawfully** — that is established at the premises, by
+an authorised officer, on physical evidence. Never write that a consumer
+restored their own supply, and never use the words theft or stealing about a
+named consumer.

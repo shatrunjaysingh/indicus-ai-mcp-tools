@@ -1538,7 +1538,11 @@ This statement must always appear.
 
 The skill must distinguish between:
 
-## Unauthorised Use
+These are two different things under two different sections of the Electricity
+Act 2003, and they are routinely conflated. Naming which one the evidence points
+at is the most consequential sentence in any report this skill produces.
+
+## Unauthorised Use — section 126
 
 Potential examples:
 
@@ -1546,9 +1550,13 @@ Potential examples:
 * Incorrect tariff/category
 * Use inconsistent with sanctioned conditions
 
-Where applicable, refer to the organization's authorized process and relevant legal framework.
+Handled by **provisional assessment under §126**. It is a billing and
+regulatory matter, not a criminal one.
 
-## Theft
+Where the evidence points here, write `unauthorised use` and **never** write
+theft.
+
+## Theft — section 135
 
 Potential indicators:
 
@@ -1557,7 +1565,15 @@ Potential indicators:
 * Direct hooking
 * Meter tampering
 
-The AI must never make the legal determination.
+A **criminal** matter under §135, with a different process, a different burden
+of proof and consequences for a named person that §126 does not carry.
+
+Even where physical tampering evidence is present, attribute it as *what the
+evidence indicates*, never as established fact.
+
+The AI must never make the legal determination. What it must do is say which of
+the two the evidence points at, because sending a §126 matter down the §135
+route puts a consumer in a criminal process over a tariff category.
 
 ---
 

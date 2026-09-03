@@ -2793,3 +2793,21 @@ see the shape, and point at the file for the rest.
 Say what the file contains and which filters produced it, so the person opening
 it in Excel knows what they are holding. An export whose selection nobody can
 reconstruct is not evidence of anything.
+
+## The legal label on a survey finding
+
+`listSurveysForReview` returns discrepancies that already name a statute, and
+the report must use the same one rather than a stronger one.
+
+**Commercial frontage on a domestic tariff is unauthorised use under §126 of
+the Electricity Act 2003 — not theft.** It is a tariff-category matter,
+assessed and billed. Writing "theft" against it puts a consumer into a criminal
+process over the wrong tariff code.
+
+**Signs of live supply at a premises recorded as disconnected** are referred to
+the illegal-restoration route. That may become a §135 matter, and it is decided
+there, on physical evidence, by an authorised officer — not here.
+
+A survey records condition. Whether that condition amounts to §126, §135, or a
+defective meter the utility should replace at its own cost is decided
+elsewhere, on more than photographs.

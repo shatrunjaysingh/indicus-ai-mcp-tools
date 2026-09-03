@@ -1690,3 +1690,21 @@ LOW FIELD PRIORITY
 
 The system's value comes from making that distinction consistently,
 transparently, and at portfolio scale.
+
+## Why recoverable is not the ledger balance
+
+`getTDRecoveryScore` returns a deduction called `statute_barred_56_2`, and it
+is not a modelling adjustment.
+
+Amounts first shown as due more than two years ago are **barred from recovery
+as arrears under §56(2) of the Electricity Act 2003**, unless they have been
+continuously shown as recoverable. That money is not unlikely to be collected —
+the utility is **not entitled to pursue it**.
+
+Rank on the recoverable figure, and say what came off and why. A programme
+built on the ledger balance sends recovery teams after money that cannot
+lawfully be demanded, and every one of those visits is a complaint waiting to
+be made.
+
+Disputed amounts come off for a different reason: the figure itself may be
+wrong, and recovery action on a disputed balance generates regulatory exposure.
