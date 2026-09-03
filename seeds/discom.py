@@ -242,6 +242,42 @@ TOOLS = [
          "Temperature outlook against the normal-year mean, and festivals and "
          "holidays in the horizon.",
          "/weather/{area}", {"area": "e.g. Pune East"}),
+    _get("getComplaintQueue",
+         "The month's complaints classified: categories, priorities, owning "
+         "departments, SLA status, escalation risk, repeats, safety overrides "
+         "and catch-up-billing diagnoses.",
+         "/complaint-queue"),
+    _get("listComplaintsForAction",
+         "Complaints filtered by priority, SLA status, escalation risk, "
+         "department or category, sorted by hours left on the clock.",
+         "/complaint-queue/list", None,
+         {"priority": "CRITICAL_SAFETY | HIGH | MEDIUM | LOW",
+          "sla_status": "WITHIN | AT_RISK | BREACHED",
+          "escalation_risk": "HIGH | MEDIUM | LOW",
+          "department": "e.g. Billing", "category": "e.g. BILLING_DISPUTE",
+          "unresolved_only": "true | false",
+          "limit": "rows to return, max 100"}),
+    _get("getComplaintTriage",
+         "One complaint classified with likely cause, recommended action, "
+         "prior history and the SLA clock.",
+         "/complaint-queue/triage/{complaint_id}",
+         {"complaint_id": "e.g. CMP-40000"}),
+    _get("getSLABreachForecast",
+         "Complaints that will breach their Standards of Performance window "
+         "within N hours, with the departmental split. These are the ones "
+         "still preventable.",
+         "/complaint-queue/sla-forecast", None,
+         {"within_hours": "default 24", "department": "e.g. Billing"}),
+    _get("getComplaintResponseFacts",
+         "The verified facts a reply to one complaint must be built from, and "
+         "what must not be stated in it.",
+         "/complaint-queue/response-facts/{complaint_id}",
+         {"complaint_id": "e.g. CMP-40000"}),
+    _get("exportComplaints",
+         "Writes the complaint queue to CSV and returns a download link.",
+         "/complaint-queue/export", None,
+         {"sla_status": "WITHIN | AT_RISK | BREACHED",
+          "unresolved_only": "true | false"}),
     _get("getComplaint", "One complaint with its text, channel and status.",
          "/complaints/{complaint_id}", {"complaint_id": "e.g. CMP-33012"}),
     _get("listComplaints", "Complaints in the queue.", "/complaints", None,
@@ -501,8 +537,20 @@ AGENTS = [
     ),
     (
         "complaint", "Complaint AI", "fast", "complaint-ai",
-        ["getComplaint", "listComplaints", "getComplaintHistory", "getConsumer",
+        ["getComplaintQueue", "listComplaintsForAction", "getComplaintTriage",
+         "getSLABreachForecast", "getComplaintResponseFacts", "exportComplaints",
+         "getComplaint", "listComplaints", "getComplaintHistory", "getConsumer",
          "getConsumptionHistory", "getBillingHistory", "getOutageHistory"],
+        "A complaint id means triage that complaint. Anything else means work "
+        "the whole queue — start with getComplaintQueue.\n\n"
+        "At queue scale, report the safety overrides first: complaints that "
+        "arrived as something else and contained a description of danger. "
+        "Everything else in the queue is service quality; those are people.\n\n"
+        "An SLA breach is a compensation liability, not a metric, so lead with "
+        "what is about to breach rather than what already has. Give the "
+        "departmental split, or the forecast is not actionable.\n\n"
+        "Report catch-up billing separately from meter faults. They are the "
+        "same sentence in the consumer's words and a different job.\n\n"
         "You route one complaint.\n\n"
         "Read it for danger before you categorise it. Sparking, burning smell, "
         "shock, a fallen conductor — that is CRITICAL_SAFETY whatever else the "
