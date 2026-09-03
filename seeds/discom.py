@@ -481,7 +481,10 @@ TOOL_NAMES = {t["name"] for t in TOOLS}
 # (key, agent name, model tier, skill, tools, system prompt)
 AGENTS = [
     (
-        "payment", "Revenue & Collection AI", "deep", "revenue-collection-ai",
+        "payment", "Revenue & Collection AI", "deep",
+        ["payment-probability-scoring", "early-warning-defaulters",
+         "recovery-action-ladder", "collection-forecast",
+         "payment-behaviour-segmentation", "collection-campaign-optimisation"],
         ["getCollectionPortfolio", "buildCampaignList", "exportDefaulterList",
          "listEarlyWarning",
          "listCollectionTargets", "getConsumerScore",
@@ -859,7 +862,12 @@ async def main() -> None:
         print("\n2. Publishing the skills")
         catalogue = {p["name"]: p for p in (await c.get("/plugins")).json()}
         plugin_ids: dict[str, str] = {}
-        for _key, _name, _tier, slug, _tool_names, _prompt in AGENTS:
+        # An agent may hold one skill or several. Use case 1 was split into six
+        # because the platform's router loads only the skills it selects for a
+        # query, so a single skill covering six jobs paid for all six on every
+        # run and diluted whichever one mattered.
+        for _key, _name, _tier, slugs, _tool_names, _prompt in AGENTS:
+          for slug in ([slugs] if isinstance(slugs, str) else slugs):
             path = SKILLS_DIR / f"{slug}.md"
             if not path.exists():
                 print(f"   {slug}: {path} not found")
@@ -914,7 +922,8 @@ async def main() -> None:
         print(f"\n3. Building the agents  (fast={fast}  deep={deep})")
 
         registry = {a["name"]: a["id"] for a in (await c.get("/agents")).json()}
-        for _key, name, tier, slug, tool_names, prompt in AGENTS:
+        for _key, name, tier, slugs, tool_names, prompt in AGENTS:
+            slug_list = [slugs] if isinstance(slugs, str) else slugs
             config = {
                 # `simple` throughout: each of these is one model call with
                 # tools against one subject. A plan-and-critique loop tripled
@@ -925,8 +934,9 @@ async def main() -> None:
                 "builtin_tools": [],
                 "custom_tool_ids": [tools[t] for t in tool_names if t in tools],
                 "skills": [
-                    {"plugin_id": plugin_ids[slug], "skill_names": [slug]}
-                ] if slug in plugin_ids else [],
+                    {"plugin_id": plugin_ids[sl], "skill_names": [sl]}
+                    for sl in slug_list if sl in plugin_ids
+                ],
             }
             missing = [t for t in tool_names if t not in tools]
             if missing:
@@ -952,7 +962,7 @@ async def main() -> None:
             else:
                 created = await c.post("/agents", json={
                     "name": name,
-                    "description": f"DISCOM operations — {slug}.",
+                    "description": f"DISCOM operations — {slug_list[0]}.",
                     "config": config})
                 if created.status_code not in (200, 201):
                     print(f"   {name} failed:", created.text[:200])
@@ -966,8 +976,9 @@ async def main() -> None:
             stored = check.get("config", {}).get("custom_tool_ids", [])
             live = [t for t in stored if t in live_tool_ids]
             flag = "" if len(live) == len(config["custom_tool_ids"]) else "  <-- MISMATCH"
+            bound = len(check.get("skill_bindings", []))
             print(f"   {name:<30} {action:<16} {len(live)} tools, "
-                  f"{len(check.get('skill_bindings', []))} skill{flag}")
+                  f"{bound} skill{'s' if bound != 1 else ''}{flag}")
 
         print(f"\nDone. Workspace: {WORKSPACE_NAME}")
         print("\nTry each agent in chat:")
