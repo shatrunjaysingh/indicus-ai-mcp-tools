@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import discom_data as data
 import discom_portfolio as portfolio
+import discom_td as td
 import csv
 import os
 from datetime import UTC, datetime
@@ -887,4 +888,239 @@ def get_collection_forecast(division: str | None = None) -> dict:
         "recent_accuracy": portfolio.FORECAST_HISTORY,
         "caveat": ("Excludes any campaign not yet run. A forecast is what the "
                    "book yields at current effort, not a target."),
+    }
+
+
+# --- TD recovery portfolio -------------------------------------------------
+# Use case 2. The per-consumer tools above answer "is this account worth
+# working"; these answer "which two and a half thousand of forty thousand does
+# the field team see this month", which is the question the client asked.
+
+@app.get("/td/portfolio", operation_id="getTDPortfolio",
+         summary="The TD book: recoverable amount, expected recovery, priority bands")
+def td_portfolio() -> dict:
+    """Every temporarily disconnected account, scored for recovery priority.
+
+    `recoverable` is deliberately not the ledger balance. Statute-barred
+    arrears under §56(2), disputed sums and post-demolition periods come off
+    first — a programme ranked on the ledger figure chases money the DISCOM
+    cannot collect and, in the barred case, is not entitled to.
+    """
+    t = td.TOTALS
+    return {
+        "accounts": t["accounts"],
+        "ledger_outstanding": round(t["outstanding"], 2),
+        "recoverable_amount": round(t["recoverable"], 2),
+        "not_recoverable": round(t["outstanding"] - t["recoverable"], 2),
+        "expected_recovery": round(t["expected"], 2),
+        "priority_bands": t["by_band"],
+        "band_meaning": {
+            "85-100": "large recoverable amount, occupier present, supply live or restored",
+            "60-84": "recoverable, occupier likely present, needs a visit to confirm",
+            "35-59": "either the amount or the probability is weak, not both",
+            "15-34": "small amount, or the occupier has probably gone",
+            "0-14": "nothing meaningfully recoverable",
+        },
+        "restoration_suspected": t["restoration_suspected"],
+        "never_surveyed": t["never_surveyed"],
+        "pd_conversion_candidates": t["pd_recommended"],
+        "by_division": {
+            d: {"accounts": v["accounts"],
+                "recoverable": round(v["recoverable"], 2),
+                "expected_recovery": round(v["expected"], 2)}
+            for d, v in t["by_division"].items()
+        },
+        "field_capacity_per_month": td.FIELD_CAPACITY_PER_MONTH,
+        "scoring_note": (
+            "Recovery priority is a percentile of the book on recoverable "
+            "amount x recovery probability. 95 means work this before 95% of "
+            "the book. It is produced by a scoring model, not by the agent."
+        ),
+    }
+
+
+@app.get("/td/accounts", operation_id="listTDRecoveryPriority",
+         summary="TD accounts ranked by recovery priority")
+def td_ranked(min_priority: int = 0, division: str | None = None,
+              restoration_only: bool = False, surveyed_only: bool = False,
+              limit: int = 20) -> dict:
+    """The ranked working list, highest recovery priority first."""
+    rows = [
+        a for a in td.RANKED
+        if a.recovery_priority >= min_priority
+        and (division is None or a.division == division)
+        and (not restoration_only or a.restoration_suspected)
+        and (not surveyed_only or a.survey_finding != "not_surveyed")
+    ]
+    shown = rows[: max(1, min(limit, 100))]
+    return {
+        "matched": len(rows),
+        "matched_recoverable": round(sum(a.recoverable_amount for a in rows), 2),
+        "matched_expected": round(
+            sum(a.recoverable_amount * a.recovery_probability for a in rows), 2),
+        "filters_applied": {
+            "min_priority": min_priority, "division": division or "all",
+            "restoration_only": restoration_only,
+            "surveyed_only": surveyed_only,
+            "ranked_by": "recovery_priority = percentile(recoverable x probability)",
+        },
+        "accounts": [
+            {"consumer_no": a.consumer_no, "division": a.division,
+             "subdivision": a.subdivision, "category": a.category,
+             "outstanding": a.outstanding,
+             "recoverable_amount": a.recoverable_amount,
+             "td_days": a.td_days,
+             "restoration_suspected": a.restoration_suspected,
+             "survey_finding": a.survey_finding,
+             "meter_status": a.meter_status,
+             "recovery_probability": a.recovery_probability,
+             "recovery_priority": a.recovery_priority,
+             "pd_recommended": a.pd_recommended}
+            for a in shown
+        ],
+    }
+
+
+@app.get("/td/accounts/{consumer_no}", operation_id="getTDRecoveryScore",
+         summary="One TD account's recovery priority and the factors behind it")
+def td_score(consumer_no: str) -> dict:
+    """The score with its inputs, so a ranking can be argued with.
+
+    `factors` are additive contributions to the recovery probability. The
+    deductions that produced the recoverable amount are listed separately,
+    because those are legal and factual rather than probabilistic — an amount
+    barred under §56(2) is not unlikely to be recovered, it is not recoverable.
+    """
+    a = td.BY_NO.get(consumer_no.upper())
+    if a is None:
+        raise HTTPException(
+            404, f"No TD account {consumer_no} in the ranked working list.")
+    return {
+        "consumer_no": a.consumer_no, "division": a.division,
+        "subdivision": a.subdivision, "category": a.category,
+        "recovery_priority": a.recovery_priority,
+        "recovery_probability": a.recovery_probability,
+        "ledger_outstanding": a.outstanding,
+        "recoverable_amount": a.recoverable_amount,
+        "deductions": {
+            "statute_barred_56_2": a.statute_barred_amount,
+            "disputed": a.disputed_amount,
+        },
+        "probability_factors": a.factors,
+        "inputs": {
+            "td_days": a.td_days,
+            "executed_and_acknowledged": a.executed_and_acknowledged,
+            "pre_td_on_time_ratio": a.pre_td_on_time_ratio,
+            "meter_status": a.meter_status,
+            "survey_finding": a.survey_finding,
+            "consumption_after_td_kwh": a.consumption_after_td_kwh,
+            "restoration_suspected": a.restoration_suspected,
+            "notices_served": a.notices_served,
+            "notices_responded": a.notices_responded,
+        },
+        "pd_recommended": a.pd_recommended,
+    }
+
+
+@app.get("/td/field-plan", operation_id="buildTDFieldPlan",
+         summary="Select the TD accounts a field team should visit this month")
+def td_field_plan(capacity: int = 0, division: str | None = None,
+                  min_priority: int = 0) -> dict:
+    """The month's field list, sized to the recovery team's real capacity.
+
+    This is the deliverable: from the whole TD book, the accounts worth a
+    visit. Excludes PD-conversion candidates — an account with nothing
+    recoverable and nobody at the premises does not need a visit, it needs a
+    decision.
+    """
+    cap = capacity if capacity > 0 else td.FIELD_CAPACITY_PER_MONTH
+    if cap > td.FIELD_CAPACITY_PER_MONTH:
+        raise HTTPException(
+            400,
+            f"TD field capacity is {td.FIELD_CAPACITY_PER_MONTH:,} visits per "
+            f"month; {cap:,} was requested.")
+    pool = [
+        a for a in td.RANKED
+        if not a.pd_recommended
+        and a.recovery_priority >= min_priority
+        and (division is None or a.division == division)
+    ]
+    selected = pool[:cap]
+    expected = sum(a.recoverable_amount * a.recovery_probability for a in selected)
+    cost = len(selected) * td.FIELD_COST_PER_VISIT
+    from collections import Counter
+    return {
+        "population": td.TOTALS["accounts"],
+        "selected": len(selected),
+        "capacity_used": f"{len(selected):,} of {td.FIELD_CAPACITY_PER_MONTH:,}",
+        "recoverable_selected": round(
+            sum(a.recoverable_amount for a in selected), 2),
+        "expected_recovery": round(expected, 2),
+        "cost": round(cost, 2),
+        "return_per_rupee_cost": round(expected / cost, 1) if cost else None,
+        "priority_range": (
+            f"{selected[-1].recovery_priority}-{selected[0].recovery_priority}"
+            if selected else "none"),
+        "survey_mix": dict(Counter(a.survey_finding for a in selected).most_common()),
+        "restoration_suspected": sum(1 for a in selected if a.restoration_suspected),
+        "excluded_pd_candidates": td.TOTALS["pd_recommended"],
+        "sample": [
+            {"consumer_no": a.consumer_no, "recovery_priority": a.recovery_priority,
+             "recoverable_amount": a.recoverable_amount, "td_days": a.td_days,
+             "survey_finding": a.survey_finding,
+             "restoration_suspected": a.restoration_suspected}
+            for a in selected[:10]
+        ],
+    }
+
+
+@app.get("/td/export", operation_id="exportTDRecoveryList",
+         summary="Write the ranked TD list to CSV and return its link")
+def td_export(min_priority: int = 0, division: str | None = None,
+              pd_candidates_only: bool = False) -> dict:
+    """Export the full ranked TD list. The rows do not come back through here."""
+    exports = Path(__file__).resolve().parent / "_exports"
+    exports.mkdir(exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    name = f"td-recovery-{stamp}.csv"
+    path = exports / name
+    columns = [
+        "consumer_no", "division", "subdivision", "category",
+        "recovery_priority", "recovery_probability", "outstanding",
+        "recoverable_amount", "statute_barred_amount", "disputed_amount",
+        "td_days", "executed_and_acknowledged", "meter_status",
+        "survey_finding", "consumption_after_td_kwh", "restoration_suspected",
+        "notices_served", "notices_responded", "pre_td_on_time_ratio",
+        "pd_recommended",
+    ]
+    rows = 0
+    recoverable = 0.0
+    preview: list[dict] = []
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        for a in td.stream_book():
+            if a.recovery_priority < min_priority:
+                continue
+            if division and a.division != division:
+                continue
+            if pd_candidates_only and not a.pd_recommended:
+                continue
+            record = {c: getattr(a, c) for c in columns}
+            writer.writerow(record)
+            rows += 1
+            recoverable += a.recoverable_amount
+            if len(preview) < 5:
+                preview.append(record)
+    return {
+        "rows": rows, "file": name,
+        "download_url": f"{PUBLIC_BASE_URL}/discom/exports/{name}",
+        "size_kb": round(path.stat().st_size / 1024, 1),
+        "columns": columns,
+        "total_recoverable": round(recoverable, 2),
+        "filters_applied": {"min_priority": min_priority,
+                            "division": division or "all",
+                            "pd_candidates_only": pd_candidates_only},
+        "preview": preview,
+        "note": "Full list in the file. Do not ask for the rows in chat.",
     }

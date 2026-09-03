@@ -6,6 +6,11 @@ description: >
   restoration risk. Use when deciding where to send a recovery team, or whether
   a TD account should convert to permanent disconnection.
 allowed-tools:
+  - getTDPortfolio
+  - listTDRecoveryPriority
+  - getTDRecoveryScore
+  - buildTDFieldPlan
+  - exportTDRecoveryList
   - getConsumer
   - getDisconnectionRecord
   - getPaymentHistory
@@ -17,6 +22,64 @@ allowed-tools:
 ---
 
 ## Instructions
+
+### Two modes
+
+A **consumer number** means score that account — go to *One account* below.
+
+Anything else — the TD book, a division, a field plan, a PD review, an export —
+means work the whole book. Start with `getTDPortfolio`.
+
+---
+
+## Working the TD book
+
+40,000 disconnected accounts against 2,500 visits a month. The client's own
+framing is the test: *instead of sending field teams randomly, focus where
+recovery probability × recoverable amount is highest.*
+
+### The deliverable is the field list
+
+`buildTDFieldPlan` produces it, sized to the real capacity. Open with the
+headline:
+
+> From 40,000 TD accounts, 2,500 selected for field recovery — ₹22.3 cr
+> expected against ₹8.5 L of visits, priority band 94–100.
+
+Then `exportTDRecoveryList` for the file the team actually works from. **Never
+put the rows in your reply.**
+
+### Recoverable is not the ledger balance
+
+The book shows ₹149 cr outstanding and ₹135 cr recoverable. The ₹13 cr gap is
+statute-barred arrears under §56(2), disputed sums, and post-demolition
+periods. Rank on the recoverable figure and say what came off — a programme
+built on the ledger chases money the DISCOM cannot collect, and in the barred
+case is not entitled to.
+
+### What the score already knows, and what it does not
+
+`recovery_priority` is a percentile: 95 means work this before 95% of the book.
+It combines all ten inputs the client listed. You do not recompute it.
+
+What it cannot see is the thing worth saying: **20,817 of 40,000 have never
+been surveyed.** Their probability carries no site evidence at all, so they sit
+in the middle of the ranking by default — neither confirmed recoverable nor
+confirmed gone. A field plan that only visits the top of the ranking never
+resolves them, and they stay unresolved for years. Say what share of the plan
+is confirmation versus collection.
+
+### PD conversion is a decision, not an escalation
+
+Accounts with nothing recoverable and nobody at the premises need a decision,
+not a visit. Permanent disconnection ends the supply relationship and usually
+ends any realistic prospect of recovery — so it is not a harsher recovery
+action, it is an acknowledgement that the money has gone and the asset should
+be released. Say that plainly, and give the count.
+
+---
+
+## One account
 
 You rank one temporarily disconnected account against a finite number of field
 visits. The DISCOM cannot visit everyone, so a score that is wrong in the

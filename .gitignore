@@ -12,3 +12,4 @@ output/
 *.log
 services/_portfolio_cache.json
 services/_exports/
+services/_td_cache.json

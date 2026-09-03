@@ -81,6 +81,36 @@ TOOLS = [
          "TD/PD record: date, method, whether the disconnection was actually "
          "executed and acknowledged in the field, reading taken, restorations.",
          "/consumers/{consumer_no}/disconnection", _C),
+    _get("getTDPortfolio",
+         "The whole TD book: ledger outstanding against recoverable amount, "
+         "expected recovery, priority bands with what each means, restoration "
+         "and never-surveyed counts, PD candidates, and field capacity.",
+         "/td/portfolio"),
+    _get("listTDRecoveryPriority",
+         "TD accounts ranked by recovery priority, filterable by priority, "
+         "division, suspected restoration and whether a survey exists.",
+         "/td/accounts", None,
+         {"min_priority": "0-100", "division": "e.g. Pune East",
+          "restoration_only": "true | false",
+          "surveyed_only": "true | false",
+          "limit": "rows to return, max 100"}),
+    _get("getTDRecoveryScore",
+         "One TD account's recovery priority with the probability factors "
+         "behind it and the deductions that produced its recoverable amount.",
+         "/td/accounts/{consumer_no}", {"consumer_no": "e.g. TD-524178"}),
+    _get("buildTDFieldPlan",
+         "Selects the TD accounts a recovery team should visit this month, "
+         "sized to field capacity, excluding PD-conversion candidates. This is "
+         "the working list.",
+         "/td/field-plan", None,
+         {"capacity": "visits; defaults to the monthly capacity",
+          "division": "e.g. Pune East", "min_priority": "0-100"}),
+    _get("exportTDRecoveryList",
+         "Writes the ranked TD list to CSV and returns the row count, totals "
+         "and a download link. The rows do not come back through the call.",
+         "/td/export", None,
+         {"min_priority": "0-100", "division": "e.g. Pune East",
+          "pd_candidates_only": "true | false"}),
     _get("getMeterStatus",
          "Meter type, last read, communication state, issued seal number and "
          "the tamper event log with work-order references.",
@@ -265,11 +295,26 @@ AGENTS = [
     (
         "recovery", "TD Recovery Prediction", "deep",
         "td-recovery-prediction",
-        ["getConsumer", "getDisconnectionRecord", "getPaymentHistory",
+        ["getTDPortfolio", "listTDRecoveryPriority", "getTDRecoveryScore",
+         "buildTDFieldPlan", "exportTDRecoveryList",
+         "getConsumer", "getDisconnectionRecord", "getPaymentHistory",
          "getBillingHistory", "getConsumptionHistory", "getMeterStatus",
          "getSiteSurvey", "getNoticeHistory"],
-        "You rank one disconnected account against a finite number of field "
-        "visits.\n\n"
+        "A consumer number means score that account. Anything else means work "
+        "the whole TD book — start with getTDPortfolio.\n\n"
+        "40,000 disconnected accounts against 2,500 visits a month. Recovery "
+        "priority is recoverable amount multiplied by recovery probability, "
+        "expressed as a percentile: 95 means work this before 95% of the "
+        "book.\n\n"
+        "Rank on the recoverable amount, not the ledger balance. The gap "
+        "between them is statute-barred arrears under section 56(2), disputed "
+        "sums and post-demolition periods — say what came off.\n\n"
+        "The deliverable is the field list: buildTDFieldPlan sized to capacity, "
+        "then exportTDRecoveryList for the file. Never put the rows in your "
+        "reply.\n\n"
+        "Say how much of the plan is confirmation rather than collection: "
+        "half the book has never been surveyed, and those accounts sit in the "
+        "middle of the ranking carrying no site evidence either way.\n\n"
         "Recovery priority is recoverable amount multiplied by probability of "
         "recovery. State both separately before combining them. A large sum "
         "owed by an untraceable occupier of a stripped premises scores low; a "
