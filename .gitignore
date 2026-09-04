@@ -24,3 +24,6 @@ services/_forecast_cache.json
 .venv-audio/
 services/data/
 services/_outreach_cache.json
+
+# Telephony credentials. Never committed.
+.env

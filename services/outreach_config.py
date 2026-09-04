@@ -31,9 +31,33 @@ out after the fact costs the client their consumers' trust.
 from __future__ import annotations
 
 import os
+import pathlib
 from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
+
+
+def _load_dotenv() -> None:
+    """Read `.env` from the repository root, if it is there.
+
+    Telephony credentials are secrets. Putting them in a file the operator
+    writes and git ignores keeps them out of shell history, out of process
+    listings, and out of any transcript of setting this up — which matters
+    more than the convenience does.
+
+    A real environment variable always wins, so a deployment that injects
+    secrets properly is never overridden by a file somebody left behind.
+    """
+    path = pathlib.Path(__file__).resolve().parents[1] / ".env"
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
 
 
 def _env(key: str, default: str = "") -> str:
@@ -211,6 +235,7 @@ def _parse_window(raw: str) -> tuple[time, time]:
 
 
 def load() -> OutreachConfig:
+    _load_dotenv()
     provider = (_env("OUTREACH_PROVIDER") or "loopback").lower()
     keys = PROVIDER_KEYS.get(provider, ())
     tz = _env("OUTREACH_TIMEZONE", "Asia/Kolkata")
