@@ -2909,3 +2909,240 @@ def forecast_export(level: str = "feeder") -> dict:
         "size_kb": round(path.stat().st_size / 1024, 1),
         "columns": columns, "level": level, "preview": preview,
     }
+
+
+# --- consumer outreach -----------------------------------------------------
+# Calling the consumer, recording it, and reading the conversation against the
+# meter. Every route serves what `generate_outreach_calls.py` produced —
+# rendering speech and running Whisper is minutes of CPU and does not belong
+# inside a request.
+
+
+@app.get("/outreach/rules", operation_id="listOutreachRules",
+         summary="The targeting rules a calling campaign can run on")
+def outreach_rules() -> dict:
+    """Which consumers a campaign would call, and the caveat on each.
+
+    Exposed as its own route because the client expects this to change. The
+    rule is an argument, not a decision baked into the campaign.
+    """
+    import discom_outreach as outreach
+
+    return {
+        "rules": [{"rule": k, "meaning": v[1]} for k, v in outreach.RULES.items()],
+        "default": "meter_test",
+        "warning":
+            "score_100 and inspect_urgent select accounts that all carry the "
+            "bypass indicator. A bypass is physical and takes minutes to "
+            "remove, so calling those consumers before an inspection destroys "
+            "the evidence the case rests on. The call is built not to mention "
+            "it, but a call from the utility about their meter is itself the "
+            "warning.",
+        "calling_window": outreach.CALLING_WINDOW,
+    }
+
+
+@app.get("/outreach/campaign", operation_id="getOutreachCampaign",
+         summary="Summary of a completed calling campaign")
+def outreach_campaign(rule: str = "meter_test", limit: int = 10) -> dict:
+    """What the campaign found, without the transcripts.
+
+    `diverted_from_inspection` is the number the campaign is worth: calls that
+    produced a reason not to send an inspector.
+    """
+    import discom_outreach as outreach
+
+    try:
+        result = outreach.campaign(rule=rule, limit=limit)
+    except outreach.CampaignNotGenerated as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return {
+        "rule": result["rule"],
+        "rule_meaning": result["rule_meaning"],
+        "called": result["called"],
+        "provider": result["provider"],
+        "summary": result["summary"],
+        "calls": [
+            {
+                "call_id": c["call_id"],
+                "consumer_no": c["consumer_no"],
+                "subdivision": c["subdivision"],
+                "risk_score": c["analysis"]["risk_score"],
+                "band_before_call": c["analysis"]["recommended_before_call"],
+                "status": c["status"],
+                "duration_seconds": c["duration_seconds"],
+                "disposition": c["analysis"]["disposition"],
+                "contradicted": c["analysis"]["contradicted_count"],
+                "corroborated": c["analysis"]["corroborated_count"],
+            }
+            for c in result["calls"] if c.get("analysis")
+        ],
+    }
+
+
+@app.get("/outreach/calls/{call_id}", operation_id="getOutreachCall",
+         summary="One call: the transcript and the full analysis")
+def outreach_call(call_id: str, rule: str = "meter_test",
+                  limit: int = 10) -> dict:
+    """Everything about one conversation.
+
+    The transcript is what Whisper actually returned, recognition errors and
+    all. A review that falls over on a misheard word is worth knowing about
+    before it meets a real recording.
+    """
+    import discom_outreach as outreach
+
+    try:
+        result = outreach.campaign(rule=rule, limit=limit)
+    except outreach.CampaignNotGenerated as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    for c in result["calls"]:
+        if c["call_id"].upper() == call_id.upper():
+            out = {k: v for k, v in c.items() if not k.startswith("_")}
+            out["listen_url"] = (
+                f"{PUBLIC_BASE_URL}/discom/outreach/calls/{c['call_id']}/audio")
+            return out
+    raise HTTPException(
+        status_code=404,
+        detail=f"No call {call_id} in campaign {rule}/{limit}. "
+               f"Have: {', '.join(c['call_id'] for c in result['calls'])}")
+
+
+@app.get("/outreach/calls/{call_id}/audio", include_in_schema=False)
+def outreach_audio(call_id: str) -> FileResponse:
+    """The mixdown, for a person to listen to."""
+    import discom_outreach as outreach
+
+    path = outreach.RECORDINGS / f"{call_id}.mp3"
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"No recording for {call_id}. Generate the campaign with "
+                   f"services/generate_outreach_calls.py.")
+    return FileResponse(path, media_type="audio/mpeg", filename=path.name)
+
+
+@app.get("/outreach/export", operation_id="exportOutreachCalls",
+         summary="Write the call analyses to CSV and return its link")
+def outreach_export(rule: str = "meter_test", limit: int = 10,
+                    disposition: str | None = None) -> dict:
+    """One row per call, for the officer who has to action them."""
+    import discom_outreach as outreach
+
+    try:
+        result = outreach.campaign(rule=rule, limit=limit)
+    except outreach.CampaignNotGenerated as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    exports = Path(__file__).resolve().parent / "_exports"
+    exports.mkdir(exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    name = f"outreach-calls-{stamp}.csv"
+    path = exports / name
+
+    # What an officer acts on. The transcript is deliberately not a column —
+    # it is paragraphs, it destroys the spreadsheet, and the call_id fetches it.
+    columns = ["call_id", "consumer_no", "division", "subdivision", "category",
+               "risk_score", "band_before_call", "status", "consent",
+               "duration_seconds", "questions_asked", "questions_answered",
+               "claims_made", "contradicted", "corroborated",
+               "evasion_markers", "vulnerability_flagged",
+               "disposition", "why", "what_would_change_it"]
+    rows, preview = 0, []
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        for c in result["calls"]:
+            a = c.get("analysis")
+            if not a or (disposition and a["disposition"] != disposition):
+                continue
+            record = {
+                "call_id": c["call_id"], "consumer_no": c["consumer_no"],
+                "division": c["division"], "subdivision": c["subdivision"],
+                "category": c["category"], "risk_score": a["risk_score"],
+                "band_before_call": a["recommended_before_call"],
+                "status": c["status"], "consent": a["consent"],
+                "duration_seconds": c["duration_seconds"],
+                "questions_asked": a["questions_asked"],
+                "questions_answered": a["questions_answered"],
+                "claims_made": "; ".join(a["claims_made"]),
+                "contradicted": a["contradicted_count"],
+                "corroborated": a["corroborated_count"],
+                "evasion_markers": "; ".join(a["evasion_markers"]),
+                "vulnerability_flagged": a["vulnerability_flagged"],
+                "disposition": a["disposition"], "why": a["why"],
+                "what_would_change_it": a["what_would_change_it"],
+            }
+            writer.writerow(record)
+            rows += 1
+            if len(preview) < 5:
+                preview.append(record)
+
+    return {
+        "rows": rows, "file": name,
+        "download_url": f"{PUBLIC_BASE_URL}/discom/exports/{name}",
+        "size_kb": round(path.stat().st_size / 1024, 1),
+        "columns": columns,
+        "filters_applied": {"rule": rule, "disposition": disposition or "all"},
+        "evidential_status":
+            "None of these rows is evidence. An automated call, without "
+            "caution and not before an authorised officer, cannot support a "
+            "§135 prosecution or a §126 assessment. It says where to look.",
+        "preview": preview,
+    }
+
+
+@app.get("/outreach/check-claim", operation_id="checkClaimAgainstMeter",
+         summary="Test a claim a consumer made against their own meter data")
+def outreach_check_claim(consumer_no: str, claim: str) -> dict:
+    """Does this consumer's meter support what they said?
+
+    The division of labour that makes the whole analysis trustworthy. Reading a
+    transcript and deciding what someone actually claimed — through hedging,
+    negation, and a recognition error or two — is what a language model is
+    good at. Deciding whether a night/day ratio of 2.6 is consistent with an
+    empty house is arithmetic against this consumer's own readings, and a model
+    asked to do it will produce a confident answer either way.
+
+    So: the agent names the claim, this returns the check. The keyword pass in
+    `getOutreachCall` is a first cut for sorting a bulk export, not the better
+    reader, and where the two disagree the agent's reading of the transcript
+    is the one to trust.
+    """
+    import discom_outreach as outreach
+
+    known = sorted({name for name, _ in outreach.CLAIM_PATTERNS})
+    if claim not in known:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown claim {claim!r}. Testable claims: {', '.join(known)}")
+
+    book = {c.consumer_no.upper(): c for c in theft._load()[0]}
+    c = book.get(consumer_no.strip().upper())
+    if c is None:
+        raise HTTPException(status_code=404, detail=f"No consumer {consumer_no}")
+
+    checks = outreach.corroborate(c, [claim])
+    if not checks:
+        return {
+            "consumer_no": c.consumer_no,
+            "claim": claim,
+            "verdict": "UNTESTABLE",
+            "against": "no reading bears on it",
+            "reasoning":
+                "Nothing in this consumer's meter data supports or refutes "
+                "that claim. Saying so is the answer — an untestable statement "
+                "must not be reported as an unsupported one.",
+        }
+    out = checks[0].__dict__ | {"consumer_no": c.consumer_no}
+    out["readings_it_was_checked_against"] = {
+        "consumption_drop_pct": c.consumption_drop_pct,
+        "load_factor_ratio": c.load_factor_ratio,
+        "night_day_ratio": c.night_day_ratio,
+        "tamper_events_12m": c.tamper_events_12m,
+        "connected_load_kw": c.connected_load_kw,
+        "sanctioned_load_kw": c.sanctioned_load_kw,
+    }
+    return out

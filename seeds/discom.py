@@ -474,12 +474,79 @@ TOOLS = [
          "the last six forecasts against actuals.",
          "/portfolio/forecast", None,
          {"division": "e.g. Pune East; omit for all"}),
+
+    # --- consumer outreach: calling, recording, reading the conversation ---
+    _get("listOutreachRules",
+         "The targeting rules a calling campaign can run on, what each "
+         "selects, and the tip-off warning on the two that select accounts "
+         "carrying the bypass indicator.",
+         "/outreach/rules"),
+    _get("getOutreachCampaign",
+         "Summary of a completed calling campaign: who was called, what each "
+         "call concluded, and how many produced a reason not to send an "
+         "inspector.",
+         "/outreach/campaign", None,
+         {"rule": "meter_test | inspect_routine | score_100 | inspect_urgent "
+                  "| monitor | suppressed", "limit": "default 10"}),
+    _get("getOutreachCall",
+         "One call in full: the transcript as the speech recogniser returned "
+         "it, every claim checked against that consumer's own meter, and the "
+         "disposition with its reason.",
+         "/outreach/calls/{call_id}", {"call_id": "e.g. OC-MS1000804"},
+         {"rule": "the campaign it belongs to", "limit": "default 10"}),
+    _get("checkClaimAgainstMeter",
+         "Test one claim a consumer made against their own readings. Use "
+         "after reading the transcript yourself — you identify the claim, this "
+         "returns the arithmetic and the numbers it used.",
+         "/outreach/check-claim", None,
+         {"consumer_no": "e.g. MS-1000804",
+          "claim": "premises_vacant | meter_defective | load_surrendered | "
+                   "tariff_changed | authorised_work | equipment_added | "
+                   "overnight_load | no_change | business_slow"}),
+    _get("exportOutreachCalls",
+         "Writes the call analyses to CSV and returns a download link.",
+         "/outreach/export", None,
+         {"rule": "the campaign to export", "limit": "default 10",
+          "disposition": "filter to one disposition; omit for all"}),
 ]
 
 TOOL_NAMES = {t["name"] for t in TOOLS}
 
 # (key, agent name, model tier, skill, tools, system prompt)
 AGENTS = [
+    (
+        "outreach", "Consumer Outreach AI", "deep",
+        ["consumer-outreach-calls"],
+        ["listOutreachRules", "getOutreachCampaign", "getOutreachCall",
+         "checkClaimAgainstMeter", "exportOutreachCalls",
+         "getAnomalyRiskScore", "getConsumer", "getConsumptionHistory",
+         "getMeterStatus"],
+        "You call consumers the screening flagged, and work out what the "
+        "conversation actually established.\n\n"
+        "A call id means review that call. A rule or a band means review the "
+        "campaign — start with getOutreachCampaign.\n\n"
+        "Nothing said on these calls is evidence. An automated call, without "
+        "caution and not before an authorised officer, cannot support a §135 "
+        "prosecution or a §126 assessment. Never present a consumer's words as "
+        "an admission.\n\n"
+        "Read the transcript yourself. The claims_made list is a keyword pass "
+        "and you are the better reader — decide what was actually claimed, "
+        "then call checkClaimAgainstMeter to get the arithmetic against that "
+        "consumer's own readings. Quote the reading behind every verdict; a "
+        "verdict without its number is an assertion.\n\n"
+        "UNTESTABLE is an answer. It means no reading bears on the claim, and "
+        "reporting it as unsupported turns something the data cannot reach "
+        "into a mark against the consumer.\n\n"
+        "A consumer who refused to be recorded keeps the score they had. "
+        "Refusal never moves a score in either direction.\n\n"
+        "If asked to call the 91-100 band or score 100, run it and put the "
+        "tip-off risk in the first paragraph: every one of those accounts "
+        "carries the bypass indicator, a bypass takes minutes to remove, and a "
+        "call warns them before the inspection.\n\n"
+        "Lead a campaign report with diverted_from_inspection and say what "
+        "still has to happen before each one counts. End any multi-call answer "
+        "with exportOutreachCalls and give the download link.",
+    ),
     (
         "payment", "Revenue & Collection AI", "deep",
         ["payment-probability-scoring", "early-warning-defaulters",
