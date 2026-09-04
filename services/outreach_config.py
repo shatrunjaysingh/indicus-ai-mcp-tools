@@ -76,6 +76,9 @@ class ProviderSettings:
 PROVIDER_KEYS: dict[str, tuple[str, ...]] = {
     "loopback": (),
     "twilio": ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER"),
+    # Same credentials, no inbound connection. See TwilioInlineProvider.
+    "twilio-inline": ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
+                      "TWILIO_FROM_NUMBER"),
     "exotel": ("EXOTEL_SID", "EXOTEL_TOKEN", "EXOTEL_CALLER_ID",
                "EXOTEL_SUBDOMAIN"),
 }
@@ -144,7 +147,7 @@ class OutreachConfig:
         if self.settings.missing:
             problems.append(
                 f"{self.provider} needs {', '.join(self.settings.missing)}")
-        if self.provider != "loopback":
+        if self.provider not in ("loopback", "twilio-inline"):
             if not self.public_url:
                 problems.append(
                     "OUTREACH_PUBLIC_URL is unset. The provider calls back into "
@@ -157,6 +160,12 @@ class OutreachConfig:
                 problems.append(
                     f"OUTREACH_PUBLIC_URL is plain http ({self.public_url}). "
                     f"Providers require https for webhooks.")
+        if self.allow_live and self.provider == "twilio-inline":
+            problems.append(
+                "twilio-inline cannot end a call when the consumer declines — "
+                "the script is fixed before dialling and nothing calls back to "
+                "branch on. That is fine for your own phone and not fine for a "
+                "consumer. Use OUTREACH_PROVIDER=twilio for live dialling.")
         if self.allow_live and self.provider == "loopback":
             problems.append(
                 "OUTREACH_ALLOW_LIVE is on but the provider is loopback, which "

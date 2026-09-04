@@ -346,3 +346,109 @@ def build(config) -> VoiceProvider:
     if problems:
         raise RuntimeError("Cannot start calling:\n  - " + "\n  - ".join(problems))
     return adapter(config)
+
+
+class TwilioInlineProvider(TwilioProvider):
+    """A real Twilio call that needs no inbound connection at all.
+
+    The webhook design has the provider call back for every turn, which means
+    the provider must be able to reach this service — a tunnel on a laptop, a
+    public hostname when deployed. That is the right architecture and it is
+    also an obstacle when all you want is to dial your own phone and show
+    somebody that it works.
+
+    This mode removes the obstacle. The entire call is built as one TwiML
+    document and handed to Twilio at dial time via the `Twiml` parameter, so
+    nothing ever calls us. Afterwards the call is polled through the REST API,
+    the recordings are pulled down, and they go through the same transcription
+    and the same analysis the webhook path uses.
+
+    WHAT IS GIVEN UP
+    ----------------
+    The call cannot branch. Every planned question is asked in order regardless
+    of the answers, and the consent checkpoint cannot end the call early —
+    branching mid-call is exactly what the callbacks were for.
+
+    That is acceptable for dialling your own phone and not acceptable for
+    dialling a consumer, so `blocking_problems` refuses to let this mode run
+    with OUTREACH_ALLOW_LIVE. A person who says "do not call me again" must be
+    able to stop the call by saying it, and here they cannot.
+
+    The questions themselves lose nothing. They come from a plan derived from
+    the signals that fired before the call starts, so they were never adaptive
+    — only the consent branch was.
+    """
+
+    name = "twilio-inline"
+    tested = False
+
+    # Twilio caps the inline document. Ours runs ~2,500 characters for five
+    # questions; the guard is here so an unusually long plan fails at build
+    # time with a clear reason rather than as a rejected call.
+    MAX_TWIML = 4000
+
+    def build_call(self, prompts: list[str], max_seconds: int) -> str:
+        parts = ['<?xml version="1.0" encoding="UTF-8"?><Response>']
+        for index, text in enumerate(prompts):
+            parts.append(
+                f'<Say voice="Polly.Aditi" language="en-IN">{_xml(text)}</Say>')
+            # No `action`: without one Twilio moves to the next verb when the
+            # answer finishes, which is what makes a linear script possible.
+            if index < len(prompts) - 1:
+                parts.append(
+                    f'<Record maxLength="{max_seconds}" timeout="3" '
+                    f'playBeep="false" trim="trim-silence" />')
+        parts.append("<Hangup/></Response>")
+        document = "".join(parts)
+        if len(document) > self.MAX_TWIML:
+            raise ValueError(
+                f"Inline call script is {len(document)} characters, over "
+                f"Twilio's {self.MAX_TWIML} limit. Use the webhook provider "
+                f"('twilio') for a plan this long, or ask fewer questions.")
+        return document
+
+    def originate_inline(self, to: str, twiml: str) -> str:
+        result = _post_form(
+            self.API.format(sid=self.sid),
+            {"To": to, "From": self.from_number, "Twiml": twiml,
+             "Timeout": "30", "Record": "true"},
+            auth=(self.sid, self.token))
+        if "sid" not in result:
+            raise RuntimeError(f"Twilio refused the call: {str(result)[:300]}")
+        return result["sid"]
+
+    def call_status(self, call_sid: str) -> dict:
+        return self._get(
+            f"https://api.twilio.com/2010-04-01/Accounts/{self.sid}"
+            f"/Calls/{call_sid}.json")
+
+    def recordings(self, call_sid: str) -> list[dict]:
+        """Every recording from the call, oldest first.
+
+        Twilio lists newest first, and the order is how each answer is matched
+        to the question that prompted it — reversed, every answer lands against
+        the wrong question and the analysis reads a conversation that never
+        happened.
+        """
+        data = self._get(
+            f"https://api.twilio.com/2010-04-01/Accounts/{self.sid}"
+            f"/Calls/{call_sid}/Recordings.json?PageSize=50")
+        items = data.get("recordings", [])
+        # `Record=true` on the call also produces a whole-call recording, which
+        # would sit in this list alongside the answers and shift every one of
+        # them by a position. Only RecordVerb entries are answers.
+        answers = [r for r in items if r.get("source") == "RecordVerb"]
+        return sorted(answers, key=lambda r: r.get("date_created", ""))
+
+    def whole_call_recording(self, call_sid: str) -> str | None:
+        """The archive recording, as distinct from the per-answer ones."""
+        data = self._get(
+            f"https://api.twilio.com/2010-04-01/Accounts/{self.sid}"
+            f"/Calls/{call_sid}/Recordings.json?PageSize=50")
+        for r in data.get("recordings", []):
+            if r.get("source") != "RecordVerb":
+                return f"https://api.twilio.com{r['uri'].replace('.json', '.wav')}"
+        return None
+
+
+ADAPTERS["twilio-inline"] = TwilioInlineProvider

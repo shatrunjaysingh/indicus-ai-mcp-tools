@@ -46,7 +46,54 @@ absent thing is the phone network.
 no 3.14 wheel, and 3.11 is what the Dockerfile builds on, so this is also the
 environment that matches production.
 
-## 2. Real calls, demoing from the USA
+## 2. Real calls from the USA, no tunnel
+
+The simplest thing that actually rings your phone. `OUTREACH_PROVIDER` is
+`twilio-inline`: the whole call script is handed to Twilio at dial time, so
+nothing ever calls back into this service and there is no tunnel, no public
+URL, and nothing exposed from your laptop.
+
+    export OUTREACH_PROVIDER=twilio-inline
+    export OUTREACH_TEST_NUMBER=+1<your own mobile>
+    export OUTREACH_TIMEZONE=America/New_York
+    export TWILIO_ACCOUNT_SID=AC...
+    export TWILIO_AUTH_TOKEN=...
+    export TWILIO_FROM_NUMBER=+1<the number you bought>
+
+    .venv-audio/bin/uvicorn mcp_server:app --port 8304
+
+Check the credentials before you present rather than during:
+
+    curl .../discom/outreach/config/verify
+
+Then dial, and poll for the result:
+
+    curl -XPOST '.../outreach/campaign/queue?rule=meter_test&limit=1'
+    curl -XPOST '.../outreach/campaign/release'
+    curl -XPOST '.../outreach/campaign/poll'      # after the call ends
+
+Your phone rings. The agent reads the opening, records your answer, works
+through the questions that consumer's fired signals produced, and hangs up.
+`poll` pulls each answer down, transcribes it, and runs the same analysis the
+loopback and webhook paths use.
+
+**What this mode gives up.** The call cannot branch, because nothing calls back
+to branch on: every planned question is asked in order regardless of the
+answers, and saying "do not call me again" will not end the call. The refusal
+is still honoured afterwards — the call is marked `REFUSED`, never retried, and
+no inference is drawn — but the questions were still asked.
+
+That is fine for dialling your own phone and not fine for dialling a consumer,
+so the configuration refuses to run this mode with `OUTREACH_ALLOW_LIVE`. For
+real consumers use `OUTREACH_PROVIDER=twilio`, which branches properly, on the
+deployed box where a public hostname exists anyway.
+
+**Trial account.** A trial can only call numbers verified in the console, and
+Twilio speaks its own announcement before your first prompt. Fine for your own
+phone; verify the number first and expect the preamble. Upgrading (~$20)
+removes both.
+
+## 3. Real calls with the full turn-by-turn flow (needs a public URL)
 
 Twilio, a US number, and a tunnel. Nothing about this touches Indian telecom
 regulation, because nobody in this configuration is calling India.
@@ -111,7 +158,7 @@ Your phone rings. Answer it and the agent works through the questions that
 consumer's fired signals produced. `OUTREACH_ALLOW_LIVE` stays unset, so every
 call lands on your number no matter which consumers the rule selected.
 
-## 3. Local, real calls to your own phone (India)
+## 4. Local, real calls to your own phone (India)
 
 A provider has to reach your laptop, so you need a public URL:
 
@@ -131,7 +178,7 @@ whole loop before anyone starts a procurement conversation. `OUTREACH_ALLOW_LIVE
 stays unset, so every call still lands on your phone regardless of which
 consumers the rule picked.
 
-## 4. Deployed
+## 5. Deployed
 
 Caddy already routes a public hostname to this service, so webhooks land
 directly and no tunnel is involved:

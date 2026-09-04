@@ -6,8 +6,10 @@ allowed-tools:
   - listOutreachRules
   - getCallingConfiguration
   - listLiveCalls
+  - verifyCallingProvider
   - queueCallingCampaign
   - releaseCallingCampaign
+  - pollCallingCampaign
   - getOutreachCampaign
   - getOutreachCall
   - checkClaimAgainstMeter
@@ -177,3 +179,24 @@ consumer who declined once must not be dialled again by a retry loop.
 
 A release that returns fewer calls than the campaign holds is not a fault.
 Concurrency is capped, and the remainder stay queued for the next release.
+
+
+## 9. Two ways a call is placed
+
+`getCallingConfiguration` names the active provider. Two shapes matter:
+
+**Callback-driven** (`twilio`, `loopback`) — the call branches as it goes. A
+consumer who declines ends the call by saying so. Results are ready when the
+call ends; nothing needs polling.
+
+**Inline** (`twilio-inline`) — the whole script is handed over at dial time and
+nothing calls back, so no public URL is needed. After the call, run
+`pollCallingCampaign` to pull the answers down and analyse them. Until you
+poll, a finished call still reads `IN_PROGRESS`, and saying it failed would be
+wrong.
+
+**The inline mode cannot stop when someone declines.** Every question is asked
+regardless. The refusal is honoured afterwards — `REFUSED`, never retried, no
+inference — but it was not honoured during the call. If a report covers inline
+calls and any consumer declined, say that plainly rather than presenting the
+refusal as though it had been respected at the time.

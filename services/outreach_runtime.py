@@ -198,10 +198,14 @@ def pump(rule: str | None = None, max_calls: int | None = None) -> dict:
         save(state)
 
         try:
-            state.provider_call_id = provider.originate(
-                number, state.call_id,
-                cfg.webhook(f"answer?call_id={state.call_id}"),
-                cfg.webhook(f"status?call_id={state.call_id}"))
+            if cfg.provider == "twilio-inline":
+                # The whole script goes out with the dial; nothing calls back.
+                _run_twilio_inline(state, consumer, cfg, provider, number)
+            else:
+                state.provider_call_id = provider.originate(
+                    number, state.call_id,
+                    cfg.webhook(f"answer?call_id={state.call_id}"),
+                    cfg.webhook(f"status?call_id={state.call_id}"))
             save(state)
         except Exception as exc:  # noqa: BLE001
             state.status, state.error = "FAILED", str(exc)[:300]
@@ -438,3 +442,102 @@ def _run_loopback(state: CallState, consumer: Any, cfg: Any) -> None:
         _time.sleep(0)
 
     on_status(state.call_id, {"CallStatus": "completed"})
+
+
+# --------------------------------------------------------------------------
+# Twilio inline: a real call with nothing calling back
+# --------------------------------------------------------------------------
+
+def _run_twilio_inline(state: CallState, consumer: Any, cfg: Any,
+                       provider: Any, number: str) -> None:
+    """Dial with the whole script attached. Nothing to wait for a webhook."""
+    questions = outreach.plan(consumer)
+    state.prompts = ([outreach.opening_line(consumer)]
+                     + [q.ask for q in questions]
+                     + [outreach.CLOSING_LINE])
+    twiml = provider.build_call(state.prompts, MAX_ANSWER_SECONDS)
+    state.provider_call_id = provider.originate_inline(number, twiml)
+    state.status = "IN_PROGRESS"
+    save(state)
+
+
+def poll(rule: str | None = None) -> dict:
+    """Advance inline calls: are they finished, and what came back.
+
+    The webhook path is pushed to; this one has to ask. Called after a release
+    and safe to call repeatedly — a call already analysed is skipped.
+    """
+    cfg = config_mod.load()
+    if cfg.provider != "twilio-inline":
+        return {"polled": 0,
+                "note": f"{cfg.provider} does not poll; it is driven by webhooks."}
+
+    provider = providers.build(cfg)
+    book = {x.consumer_no: x for x in _load()[0]}
+    finished, waiting = [], []
+
+    for state in all_calls(rule):
+        if state.status not in ("DIALING", "IN_PROGRESS") or not state.provider_call_id:
+            continue
+        try:
+            info = provider.call_status(state.provider_call_id)
+        except Exception as exc:  # noqa: BLE001
+            state.error = str(exc)[:200]
+            save(state)
+            continue
+
+        status = (info.get("status") or "").lower()
+        if status in ("queued", "ringing", "in-progress"):
+            waiting.append(state.call_id)
+            continue
+
+        if status in ("no-answer", "busy", "canceled", "failed"):
+            exhausted = state.attempts >= cfg.max_attempts
+            state.status = "FAILED" if exhausted else "NO_ANSWER"
+            state.error = f"Twilio reported {status}"
+            state.ended_at = _now() if exhausted else ""
+            save(state)
+            finished.append(state.call_id)
+            continue
+
+        # Completed. Pull the answers down in order and recognise each.
+        TURN_AUDIO.mkdir(parents=True, exist_ok=True)
+        state.answers = []
+        for turn, rec in enumerate(provider.recordings(state.provider_call_id)):
+            url = f"https://api.twilio.com{rec['uri'].replace('.json', '.wav')}"
+            dest = TURN_AUDIO / f"{state.call_id}-{turn}.wav"
+            text = ""
+            try:
+                provider.fetch(url, dest)
+                text = _recognise(dest)
+            except Exception as exc:  # noqa: BLE001
+                state.error = f"turn {turn}: {str(exc)[:160]}"
+            state.answers.append({
+                "turn": turn, "text": text, "audio": str(dest),
+                "recording_url": url, "confidence": None,
+                "heard": bool(text.strip()),
+            })
+
+        first = state.answers[0]["text"] if state.answers else ""
+        # An inline call cannot stop when someone declines — there is nothing
+        # to branch on. The refusal is still honoured afterwards: the call is
+        # marked REFUSED, never retried, and the analysis draws no inference
+        # from it. What cannot be undone is that the questions were asked, and
+        # that is why this mode is barred from live dialling.
+        if outreach.refused_consent(first):
+            state.consent = "refused"
+            state.status = "REFUSED"
+        else:
+            state.consent = "granted"
+            state.status = "COMPLETED"
+        state.ended_at = _now()
+        try:
+            state.recording = provider.whole_call_recording(state.provider_call_id)
+        except Exception:  # noqa: BLE001
+            state.recording = None
+        save(state)
+        _finalise(state, book[state.consumer_no])
+        finished.append(state.call_id)
+
+    return {"polled": len(finished) + len(waiting),
+            "finished": finished, "still_ringing": waiting}

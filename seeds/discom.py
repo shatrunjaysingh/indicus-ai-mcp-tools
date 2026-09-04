@@ -545,6 +545,16 @@ TOOLS = [
           "/outreach/campaign/queue",
           {"rule": "meter_test | inspect_routine | score_100 | inspect_urgent "
                    "| monitor | suppressed", "limit": "default 10"}),
+    _get("verifyCallingProvider",
+         "Checks the telephony credentials against the provider without "
+         "placing a call: whether they work, whether the from-number belongs "
+         "to the account, and which numbers a trial account may dial.",
+         "/outreach/config/verify"),
+    _post("pollCallingCampaign",
+          "Asks the provider how calls went, for the mode that places calls "
+          "without callbacks, and analyses the ones that finished. Safe to "
+          "call repeatedly.",
+          "/outreach/campaign/poll", {"rule": "restrict to one campaign"}),
     _post("releaseCallingCampaign",
           "Starts calling the consumers a queued campaign selected. This is "
           "the step that places real calls — never call it without the "
@@ -562,8 +572,9 @@ AGENTS = [
         ["consumer-outreach-calls"],
         ["listOutreachRules", "getOutreachCampaign", "getOutreachCall",
          "checkClaimAgainstMeter", "exportOutreachCalls",
-         "getCallingConfiguration", "listLiveCalls", "queueCallingCampaign",
-         "releaseCallingCampaign",
+         "getCallingConfiguration", "verifyCallingProvider", "listLiveCalls",
+         "queueCallingCampaign", "releaseCallingCampaign",
+         "pollCallingCampaign",
          "getAnomalyRiskScore", "getConsumer", "getConsumptionHistory",
          "getMeterStatus"],
         "You call consumers the screening flagged, and work out what the "

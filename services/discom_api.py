@@ -3311,3 +3311,16 @@ def outreach_verify() -> dict:
                 "note": f"The {cfg.provider} adapter has no credential check. "
                         f"It has also not been run against a live account."}
     return check()
+
+
+@app.post("/outreach/campaign/poll", operation_id="pollCallingCampaign",
+          summary="Check on calls placed without callbacks, and analyse finished ones")
+def outreach_poll(rule: str | None = None) -> dict:
+    """Ask the provider how the calls went.
+
+    Only the inline mode needs this. The webhook providers are pushed to and
+    have already finished by the time anything asks. Safe to call repeatedly.
+    """
+    import outreach_runtime as rt
+
+    return rt.poll(rule=rule)
