@@ -973,6 +973,34 @@ The scoring engine must account for signal correlation.
 
 ---
 
+# 29. Risk Score — the per-consumer line
+
+When naming a consumer in a list or a summary, use this form:
+
+```text
+Consumer No. MS-801023 → Risk Score: 91/100 → Recommended for inspection.
+```
+
+Consumer number, score out of 100, recommendation. One line, so a hundred of
+them read as a worklist rather than a report.
+
+The recommendation is the band, in words a team acts on: *recommended for
+inspection*, *recommended for meter test*, *monitor*, *no action*. Never write
+"confirmed", "guilty", "theft established" — the line ends at a recommendation
+because that is where this skill's authority ends.
+
+Where the line needs a reason, append the single strongest signal and nothing
+more:
+
+```text
+Consumer No. MS-801023 → Risk Score: 91/100 → Recommended for inspection.
+  possible bypass seen at a previous visit
+```
+
+Full evidence belongs in the case narrative below, not on the line.
+
+---
+
 # 29. Risk Score
 
 Generate:
