@@ -1013,25 +1013,11 @@ This is a prioritization score, not a probability of guilt.
 
 Recommended interpretation:
 
-```text
-0–19:
-Very Low
-
-20–39:
-Low
-
-40–59:
-Moderate
-
-60–74:
-Elevated
-
-75–89:
-High
-
-90–100:
-Very High
-```
+The bands the tool returns are listed at the end of this skill under "The
+bands the tool actually returns". Use those — `INSPECT_URGENT`,
+`INSPECT_ROUTINE`, `METER_TEST`, `MONITOR`, `NO_ACTION` — rather than a
+severity vocabulary of your own, or a report will describe a consumer as "High"
+while the system has classified them for a meter test.
 
 Thresholds must be configurable.
 
@@ -3661,3 +3647,25 @@ point at the file for the rest.
 
 Say what the file contains and which filters produced it. An export whose
 selection nobody can reconstruct is not evidence of anything.
+
+## The bands the tool actually returns
+
+`recommended` comes back as one of these, and the report must use the same
+words rather than inventing a scale beside it:
+
+| Score | `recommended` | Meaning |
+|---|---|---|
+| 91–100 | `INSPECT_URGENT` | physical evidence plus corroborating signals |
+| 70–90 | `INSPECT_ROUTINE` | worth a visit, evidence not yet conclusive |
+| 45–69 | `METER_TEST` | consistent with a defective meter — test before accusing |
+| 25–44 | `MONITOR` | one or two weak signals |
+| 0–24 | `NO_ACTION` | |
+
+Urgent is 91–100 because that is what the inspection capacity can absorb. A
+wider urgent band describes more accounts than can be visited, and then
+"urgent" means nothing.
+
+**The score is a sum of fixed signal weights, so it takes few distinct
+values** — hundreds of consumers can share a score, with the identical
+combination of signals behind it. It orders bands, not individuals. Where two
+accounts tie, separate them on the evidence, not on the number.

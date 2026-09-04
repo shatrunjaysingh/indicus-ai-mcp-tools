@@ -2811,3 +2811,27 @@ there, on physical evidence, by an authorised officer — not here.
 A survey records condition. Whether that condition amounts to §126, §135, or a
 defective meter the utility should replace at its own cost is decided
 elsewhere, on more than photographs.
+
+## The values the tool actually returns
+
+`status` is one of:
+
+| | |
+|---|---|
+| `VERIFIED` | images sufficient, meter number matches, nothing disagrees |
+| `PARTIAL` | usable, but something is missing or disagrees with the record |
+| `UNUSABLE` | the images do not show what they need to show |
+
+`meter_number_outcome` is one of:
+
+| | |
+|---|---|
+| `MATCHES_RECORD` | the read agrees with the consumer record |
+| `LIKELY_OCR_ARTEFACT` | differs by one known confusion pair — 8/B, 0/O, 1/7, 5/S, 6/G. **The reader was uncertain** |
+| `DIFFERS_FROM_RECORD` | **the meter at the premises may not be the one being billed** |
+| `UNREADABLE` | below the confidence floor; a guessed number is worse than none |
+
+**Never merge the middle two into one count of "mismatches".** An artefact
+means the reader was uncertain; a genuine difference means a possible meter
+swap, and they lead to completely different actions. Never silently correct an
+artefact to match the record — that is how a real swap disappears.

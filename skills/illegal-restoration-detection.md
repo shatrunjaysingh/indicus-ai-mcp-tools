@@ -1899,3 +1899,20 @@ that supply was restored unlawfully** — that is established at the premises, b
 an authorised officer, on physical evidence. Never write that a consumer
 restored their own supply, and never use the words theft or stealing about a
 named consumer.
+
+## The exclusion keys the tool actually returns
+
+`getRestorationScreening` returns `excluded` with exactly these keys, and a
+report should account for both by name:
+
+| Key | What it means |
+|---|---|
+| `estimated_reads_only` | the consumption is provisional billing. Nobody measured that power, and a case built on it is not a case |
+| `disconnection_execution_unconfirmed` | no field acknowledgement, so the disconnection may never have happened. Then there is no offence — the finding is a process failure in the utility's own records |
+
+Both cap the risk at 30 rather than zeroing it: the case still needs resolving,
+just not by sending an enforcement team.
+
+Separately, `flagged_but_paid_near_restart` counts accounts that paid shortly
+before consumption resumed. Scored down heavily rather than excluded, because
+the payment may have been for arrears rather than reconnection.

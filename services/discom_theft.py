@@ -200,13 +200,17 @@ def _score(c: ScreenedConsumer) -> tuple[int, list[str], dict, str, str | None, 
             raw = min(100.0, sum(parts.values()))
 
     score = int(round(raw))
-    if score >= 70:
+    # Urgent is 91-100, matching the requirement's own example — "Risk Score:
+    # 91/100 -> Recommended for inspection". At 70 the urgent band held 3,888
+    # accounts against 1,800 inspections a month, so "urgent" described more
+    # than twice what could be done and stopped meaning anything.
+    if score >= 91:
         action = "INSPECT_URGENT"
-    elif score >= 45:
+    elif score >= 70:
         action = "INSPECT_ROUTINE"
-    elif score >= 25:
+    elif score >= 45:
         action = "METER_TEST"
-    elif score >= 10:
+    elif score >= 25:
         action = "MONITOR"
     else:
         action = "NO_ACTION"
@@ -297,7 +301,7 @@ def _generate() -> tuple[list[ScreenedConsumer], dict]:
 
 
 def _load() -> tuple[list[ScreenedConsumer], dict]:
-    key = f"{SEED}-{POPULATION}-{MATERIALISE}-v3"
+    key = f"{SEED}-{POPULATION}-{MATERIALISE}-v4-bands"
     cache = Path(__file__).resolve().parent / "_theft_cache.json"
     if cache.exists():
         try:

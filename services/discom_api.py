@@ -1181,11 +1181,11 @@ def screening() -> dict:
         "screened": t["screened"],
         "recommendation_bands": t["by_action"],
         "band_meaning": {
-            "INSPECT_URGENT": "70-100: physical or metering evidence, multiple signals",
-            "INSPECT_ROUTINE": "45-69: worth a visit, evidence not yet physical",
-            "METER_TEST": "25-44: consistent with a defective meter; test before accusing",
-            "MONITOR": "10-24: one weak signal",
-            "NO_ACTION": "0-9",
+            "INSPECT_URGENT": "91-100: physical evidence plus corroborating signals",
+            "INSPECT_ROUTINE": "70-90: worth a visit, evidence not yet conclusive",
+            "METER_TEST": "45-69: consistent with a defective meter; test before accusing",
+            "MONITOR": "25-44: one or two weak signals",
+            "NO_ACTION": "0-24",
         },
         "flagged_for_inspection": inspect,
         "inspection_capacity_per_month": theft.INSPECTION_CAPACITY_PER_MONTH,
@@ -1291,7 +1291,7 @@ def screening_score(consumer_no: str) -> dict:
 @app.get("/screening/inspection-plan", operation_id="buildInspectionPlan",
          summary="Select the consumers an enforcement wing should inspect this month")
 def inspection_plan(capacity: int = 0, division: str | None = None,
-                    min_risk: int = 45) -> dict:
+                    min_risk: int = 70) -> dict:
     """The month's inspection list, sized to enforcement capacity.
 
     Excludes anything with a documented explanation, and says how many that

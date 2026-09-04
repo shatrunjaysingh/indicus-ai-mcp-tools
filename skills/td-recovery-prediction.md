@@ -1708,3 +1708,21 @@ be made.
 
 Disputed amounts come off for a different reason: the figure itself may be
 wrong, and recovery action on a disputed balance generates regulatory exposure.
+
+## The bands the tool actually returns
+
+`getTDPortfolio` returns counts in these bands, and a report should use them
+rather than invent adjectives:
+
+| Priority | Meaning |
+|---|---|
+| 85–100 | large recoverable amount, occupier present, supply live or restored |
+| 60–84 | recoverable, occupier likely present, needs a visit to confirm |
+| 35–59 | either the amount or the probability is weak, not both |
+| 15–34 | small amount, or the occupier has probably gone |
+| 0–14 | nothing meaningfully recoverable |
+
+Priority is a **percentile** of the book: 95 means work this before 95% of it.
+It cannot separate accounts inside a band — 200 sit at 100 spanning a fourfold
+range of value — so quote `expected_recovery` alongside it whenever the
+question is what a list is worth.

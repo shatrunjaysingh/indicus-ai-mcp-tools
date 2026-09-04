@@ -1838,3 +1838,15 @@ point at the file for the rest.
 
 Say what the file contains and which filters produced it. An export whose
 selection nobody can reconstruct is not evidence of anything.
+
+## The SLA values the tool actually returns
+
+`sla_status` is one of `WITHIN`, `AT_RISK`, or `BREACHED`. Use those words.
+
+`AT_RISK` means under a quarter of the window remains — still preventable, and
+the only one of the three worth leading a report with. `BREACHED` is a
+compensation liability already incurred and cannot be changed by anything in
+the answer.
+
+`getSLABreachForecast` returns what will breach within a window. That is the
+actionable list; the breached count is the historical one.
