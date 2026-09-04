@@ -3280,3 +3280,34 @@ async def voice_status(request: Request, call_id: str) -> dict:
     except Exception:  # noqa: BLE001
         payload = {}
     return rt.on_status(call_id, payload)
+
+
+@app.get("/outreach/config/verify", operation_id="verifyCallingProvider",
+         summary="Check the telephony credentials without placing a call")
+def outreach_verify() -> dict:
+    """Ask the provider whether it would accept us, before a demo depends on it.
+
+    Catches the things that otherwise surface thirty seconds before a call that
+    was supposed to work: a mistyped token, a from-number that belongs to a
+    different account, or a trial account that will refuse the number you meant
+    to dial because nobody verified it.
+    """
+    import outreach_config as cfgmod
+    import outreach_providers as provs
+
+    cfg = cfgmod.load()
+    if cfg.provider == "loopback":
+        return {"provider": "loopback", "ok": True,
+                "note": "Loopback needs no credentials and dials nothing."}
+    problems = cfg.blocking_problems()
+    if problems:
+        return {"provider": cfg.provider, "ok": False,
+                "problem": "configuration incomplete", "blocking_problems": problems}
+
+    provider = provs.build(cfg)
+    check = getattr(provider, "verify", None)
+    if check is None:
+        return {"provider": cfg.provider, "ok": None,
+                "note": f"The {cfg.provider} adapter has no credential check. "
+                        f"It has also not been run against a live account."}
+    return check()

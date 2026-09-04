@@ -103,8 +103,8 @@ class LoopbackProvider:
     name = "loopback"
     tested = True
 
-    def __init__(self, settings: Any = None) -> None:
-        self.settings = settings
+    def __init__(self, config: Any = None) -> None:
+        self.config = config
 
     def originate(self, to: str, call_id: str, answer_url: str,
                   status_url: str) -> str:
@@ -141,10 +141,12 @@ class TwilioProvider:
 
     API = "https://api.twilio.com/2010-04-01/Accounts/{sid}/Calls.json"
 
-    def __init__(self, settings: Any) -> None:
-        self.sid = settings.values["TWILIO_ACCOUNT_SID"]
-        self.token = settings.values["TWILIO_AUTH_TOKEN"]
-        self.from_number = settings.values["TWILIO_FROM_NUMBER"]
+    def __init__(self, config: Any) -> None:
+        v = config.settings.values
+        self.sid = v["TWILIO_ACCOUNT_SID"]
+        self.token = v["TWILIO_AUTH_TOKEN"]
+        self.from_number = v["TWILIO_FROM_NUMBER"]
+        self.stt = getattr(config, "stt", "provider")
 
     def originate(self, to: str, call_id: str, answer_url: str,
                   status_url: str) -> str:
@@ -156,12 +158,38 @@ class TwilioProvider:
              # A consumer who does not pick up in 30 seconds is not going to.
              # Longer just holds a concurrency slot open.
              "Timeout": "30",
-             "MachineDetection": "Enable"},
+             "MachineDetection": "Enable",
+             # Record the whole call regardless of how the turns are
+             # recognised. Provider STT gives text fast enough for a live
+             # conversation but keeps no audio, and the recording is the thing
+             # a reviewer listens to when they doubt a transcript.
+             "Record": "true"},
             auth=(self.sid, self.token))
         return result.get("sid", "")
 
     def say_and_record(self, text: str, next_url: str,
                        max_seconds: int) -> Instruction:
+        """Speak, then listen.
+
+        Two ways to hear the answer, and the difference is felt on a live call.
+        `<Gather input="speech">` has Twilio recognise it and post the text
+        inline — the next question follows in about a second. `<Record>` posts
+        an audio URL that has to be downloaded and put through Whisper, which
+        adds four to six seconds of silence to every turn. That is tolerable in
+        a batch and painful in front of an audience.
+
+        Whisper still wins on accuracy for accented English, so the mode is a
+        setting rather than a decision made here.
+        """
+        if self.stt == "provider":
+            return Instruction(
+                f'<?xml version="1.0" encoding="UTF-8"?><Response>'
+                f'<Gather input="speech" action="{_xml(next_url)}" method="POST" '
+                f'speechTimeout="auto" speechModel="phone_call" '
+                f'language="en-IN" actionOnEmptyResult="true">'
+                f'<Say voice="Polly.Aditi" language="en-IN">{_xml(text)}</Say>'
+                f'</Gather>'
+                f'</Response>', "application/xml")
         return Instruction(
             f'<?xml version="1.0" encoding="UTF-8"?><Response>'
             f'<Say voice="Polly.Aditi" language="en-IN">{_xml(text)}</Say>'
@@ -169,6 +197,62 @@ class TwilioProvider:
             f'maxLength="{max_seconds}" timeout="4" playBeep="false" '
             f'trim="trim-silence" />'
             f'</Response>', "application/xml")
+
+    def verify(self) -> dict:
+        """Check the credentials before a demo, without dialling anybody.
+
+        Worth its weight the first time a wrong token or an unverified number
+        turns up thirty seconds before a call that was supposed to work.
+        """
+        import urllib.error
+
+        out: dict[str, Any] = {"provider": "twilio"}
+        base = f"https://api.twilio.com/2010-04-01/Accounts/{self.sid}"
+        try:
+            account = self._get(f"{base}.json")
+            out["account"] = account.get("friendly_name")
+            out["status"] = account.get("status")
+            out["trial"] = account.get("type") == "Trial"
+        except urllib.error.HTTPError as exc:
+            return {"provider": "twilio", "ok": False,
+                    "problem": f"credentials rejected ({exc.code}). Check "
+                               f"TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN."}
+        except Exception as exc:  # noqa: BLE001
+            return {"provider": "twilio", "ok": False, "problem": str(exc)[:200]}
+
+        try:
+            owned = self._get(f"{base}/IncomingPhoneNumbers.json?PageSize=50")
+            numbers = [n["phone_number"] for n in owned.get("incoming_phone_numbers", [])]
+            out["your_numbers"] = numbers
+            out["from_number_owned"] = self.from_number in numbers
+        except Exception:  # noqa: BLE001
+            out["your_numbers"] = "could not list"
+
+        if out.get("trial"):
+            try:
+                caller_ids = self._get(f"{base}/OutgoingCallerIds.json?PageSize=50")
+                out["verified_numbers"] = [
+                    c["phone_number"] for c in caller_ids.get("outgoing_caller_ids", [])]
+            except Exception:  # noqa: BLE001
+                out["verified_numbers"] = "could not list"
+            out["trial_note"] = (
+                "Trial accounts can only call numbers on verified_numbers, and "
+                "Twilio plays its own trial message before your first prompt. "
+                "Upgrading removes both.")
+
+        out["ok"] = bool(out.get("from_number_owned"))
+        if not out["ok"]:
+            out["problem"] = (
+                f"TWILIO_FROM_NUMBER {self.from_number} is not one of the "
+                f"numbers on this account.")
+        return out
+
+    def _get(self, url: str) -> dict:
+        req = urllib.request.Request(url)
+        token = base64.b64encode(f"{self.sid}:{self.token}".encode()).decode()
+        req.add_header("Authorization", f"Basic {token}")
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read().decode())
 
     def say_and_hangup(self, text: str) -> Instruction:
         return Instruction(
@@ -202,8 +286,8 @@ class ExotelProvider:
     name = "exotel"
     tested = False
 
-    def __init__(self, settings: Any) -> None:
-        v = settings.values
+    def __init__(self, config: Any) -> None:
+        v = config.settings.values
         self.sid = v["EXOTEL_SID"]
         self.token = v["EXOTEL_TOKEN"]
         self.caller_id = v["EXOTEL_CALLER_ID"]
@@ -261,4 +345,4 @@ def build(config) -> VoiceProvider:
     problems = config.blocking_problems()
     if problems:
         raise RuntimeError("Cannot start calling:\n  - " + "\n  - ".join(problems))
-    return adapter(config.settings)
+    return adapter(config)

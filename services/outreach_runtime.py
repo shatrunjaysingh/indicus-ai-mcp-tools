@@ -310,7 +310,14 @@ def on_status(call_id: str, payload: dict) -> dict:
 def _capture(state: CallState, turn: int, payload: dict,
              provider: Any) -> str:
     """Store one consumer answer and return what was heard."""
-    text = payload.get("_loopback_text", "")
+    # Three ways an answer arrives, in order of how much work they cost.
+    # Loopback hands us the text. Provider speech recognition returns it inline
+    # on the webhook — a second per turn, which is what makes a live call feel
+    # like a conversation. A recording has to be downloaded and put through
+    # Whisper, which is more accurate on accented English and adds four to six
+    # seconds of silence to every turn.
+    text = payload.get("_loopback_text", "") or payload.get("SpeechResult", "")
+    confidence = payload.get("Confidence")
     url = provider.recording_url(payload)
     path = None
 
@@ -328,6 +335,11 @@ def _capture(state: CallState, turn: int, payload: dict,
         "turn": turn, "text": text,
         "audio": str(path) if path else None,
         "recording_url": url,
+        "confidence": confidence,
+        # An empty answer is a fact about the call, not a gap to paper over. It
+        # means the consumer said nothing the recogniser could use, and the
+        # analysis counts it as a question that did not land.
+        "heard": bool(text.strip()),
     })
     save(state)
     return text

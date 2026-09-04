@@ -12,6 +12,7 @@ edit: the runtime asks this module what to use and never names a vendor.
     OUTREACH_WINDOW          local calling window            (default 09:00-21:00)
     OUTREACH_TIMEZONE        (default Asia/Kolkata)
     OUTREACH_MAX_ATTEMPTS    retries on no-answer            (default 2)
+    OUTREACH_STT             provider | whisper              (default provider)
 
 THE TEST NUMBER IS ON BY DEFAULT
 --------------------------------
@@ -88,6 +89,7 @@ class OutreachConfig:
     allow_live: bool
     max_concurrent: int
     max_attempts: int
+    stt: str
     window_start: time
     window_end: time
     timezone: str
@@ -179,6 +181,10 @@ class OutreachConfig:
             "in_window_now": self.within_window(),
             "max_concurrent": self.max_concurrent,
             "max_attempts": self.max_attempts,
+            "speech_recognition": (
+                "provider — the vendor returns text inline, no download"
+                if self.stt == "provider" else
+                "whisper — each answer is downloaded and transcribed here"),
             "blocking_problems": self.blocking_problems(),
         }
 
@@ -198,7 +204,15 @@ def _parse_window(raw: str) -> tuple[time, time]:
 def load() -> OutreachConfig:
     provider = (_env("OUTREACH_PROVIDER") or "loopback").lower()
     keys = PROVIDER_KEYS.get(provider, ())
-    start, end = _parse_window(_env("OUTREACH_WINDOW", "09:00-21:00"))
+    tz = _env("OUTREACH_TIMEZONE", "Asia/Kolkata")
+    # 09:00-21:00 is the TCCCPR window and the right default for calling Indian
+    # consumers. It is the wrong default for a demo dialling a US number from a
+    # US timezone, where it is frequently shut — and the failure shows up as a
+    # refusal to dial, mid-demonstration. Outside India the window opens up
+    # unless it was set deliberately; the legal constraint attaches to who is
+    # being called, and nobody in this configuration is calling India.
+    default_window = "09:00-21:00" if tz.startswith("Asia/") else "00:00-23:59"
+    start, end = _parse_window(_env("OUTREACH_WINDOW", default_window))
     return OutreachConfig(
         provider=provider,
         public_url=_env("OUTREACH_PUBLIC_URL"),
@@ -206,8 +220,9 @@ def load() -> OutreachConfig:
         allow_live=_bool("OUTREACH_ALLOW_LIVE", False),
         max_concurrent=_int("OUTREACH_MAX_CONCURRENT", 3),
         max_attempts=_int("OUTREACH_MAX_ATTEMPTS", 2),
+        stt=(_env("OUTREACH_STT") or "provider").lower(),
         window_start=start, window_end=end,
-        timezone=_env("OUTREACH_TIMEZONE", "Asia/Kolkata"),
+        timezone=tz,
         settings=ProviderSettings(
             name=provider, required=keys,
             values={k: _env(k) for k in keys}),

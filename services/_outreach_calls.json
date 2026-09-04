@@ -1,323 +1,110 @@
 {
- "OC-MS1004162": {
-  "call_id": "OC-MS1004162",
-  "consumer_no": "MS-1004162",
-  "rule": "inspect_routine",
+ "OC-MS1000804": {
+  "call_id": "OC-MS1000804",
+  "consumer_no": "MS-1000804",
+  "rule": "meter_test",
   "status": "COMPLETED",
-  "turn": 5,
+  "turn": 3,
   "attempts": 1,
   "provider": "loopback",
-  "provider_call_id": "LB-OC-MS1004162",
+  "provider_call_id": "LB-OC-MS1000804",
   "signals": [
    "sudden_drop",
    "load_inconsistency",
-   "repeated_tampering",
-   "night_day",
-   "excess_load"
+   "repeated_tampering"
   ],
   "prompts": [
-   "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 4 1 6 2, at your registered premises in Wanowrie. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
-   "Our records show the electricity recorded at your premises fell by about 64 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?",
-   "Our records show about 5 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?",
-   "Our meter recorded its cover being opened on 15 November 2025 and 20 January 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?",
-   "The meter shows noticeably more electricity used at night than during the day. Is there equipment that runs overnight at your premises?",
-   "Your sanctioned load is 3 kilowatts and we are seeing around 5 connected. Have you added any equipment since the connection was sanctioned?",
-   "Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye."
-  ],
-  "answers": [
-   {
-    "turn": 0,
-    "text": "Yes, fine, tell me.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1004162-0.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1004162-0.wav"
-   },
-   {
-    "turn": 1,
-    "text": "Why are you asking me this, I pay my bill every month, check your records.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1004162-1.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1004162-1.wav"
-   },
-   {
-    "turn": 2,
-    "text": "some is used, some is not, what difference does it make?",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1004162-2.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1004162-2.wav"
-   },
-   {
-    "turn": 3,
-    "text": "There is construction all around here, anyone could have touch it.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1004162-3.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1004162-3.wav"
-   },
-   {
-    "turn": 4,
-    "text": "maybe the neighbors, their line runs past my wall.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1004162-4.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1004162-4.wav"
-   },
-   {
-    "turn": 5,
-    "text": "same as always, nothing added, you have the papers, you tell me.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1004162-5.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1004162-5.wav"
-   }
-  ],
-  "consent": "granted",
-  "recording": null,
-  "error": "",
-  "queued_at": "2026-09-04T19:07:27+00:00",
-  "started_at": "2026-09-04T19:07:27+00:00",
-  "ended_at": "2026-09-04T19:07:41+00:00",
-  "analysis": {
-   "consumer_no": "MS-1004162",
-   "risk_score": 90,
-   "recommended_before_call": "INSPECT_ROUTINE",
-   "consent": "granted",
-   "questions_asked": 5,
-   "questions_answered": 5,
-   "responsiveness": 1.0,
-   "claims_made": [
-    "no_change",
-    "blames_others",
-    "deflects",
-    "offers_documents"
-   ],
-   "corroboration": [
-    {
-     "claim": "no_change",
-     "verdict": "CONTRADICTED",
-     "against": "consumption down 64%",
-     "reasoning": "Nothing changed at the premises, but the recorded consumption moved substantially. Either the meter is wrong or the account is. Both are worth resolving; only one is an offence."
-    }
-   ],
-   "contradicted_count": 1,
-   "corroborated_count": 0,
-   "evasion_markers": [
-    "blames_others",
-    "deflects"
-   ],
-   "cooperation_markers": [
-    "offers_documents"
-   ],
-   "vulnerability_flagged": false,
-   "disposition": "PROCEED_UNCHANGED",
-   "why": "The consumer states nothing changed, which the reading does not support \u2014 but a denial is not evidence, and this account was already ranked on signals the call did not touch. It stands where the screening put it.",
-   "what_would_change_it": "A documented explanation, or a meter test result.",
-   "evidential_status": "Not evidence. An automated call, without caution and not before an authorised officer, cannot support a \u00a7135 prosecution or a \u00a7126 assessment. It directs where to look; the finding must come from a meter test or an inspection conducted under the Act.",
-   "transcript": {
-    "engine": "assembled (agent verbatim, consumer via faster-whisper)",
-    "diarisation": "none needed \u2014 one recording per consumer answer",
-    "turn_count": 13,
-    "duration_seconds": 65.0,
-    "turns": [
-     {
-      "speaker": "representative",
-      "text": "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 4 1 6 2, at your registered premises in Wanowrie. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
-      "start": 0.0,
-      "end": 4.0
-     },
-     {
-      "speaker": "customer",
-      "text": "Yes, fine, tell me.",
-      "start": 5.0,
-      "end": 9.0
-     },
-     {
-      "speaker": "representative",
-      "text": "Our records show the electricity recorded at your premises fell by about 64 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?",
-      "start": 10.0,
-      "end": 14.0
-     },
-     {
-      "speaker": "customer",
-      "text": "Why are you asking me this, I pay my bill every month, check your records.",
-      "start": 15.0,
-      "end": 19.0
-     },
-     {
-      "speaker": "representative",
-      "text": "Our records show about 5 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?",
-      "start": 20.0,
-      "end": 24.0
-     },
-     {
-      "speaker": "customer",
-      "text": "some is used, some is not, what difference does it make?",
-      "start": 25.0,
-      "end": 29.0
-     },
-     {
-      "speaker": "representative",
-      "text": "Our meter recorded its cover being opened on 15 November 2025 and 20 January 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?",
-      "start": 30.0,
-      "end": 34.0
-     },
-     {
-      "speaker": "customer",
-      "text": "There is construction all around here, anyone could have touch it.",
-      "start": 35.0,
-      "end": 39.0
-     },
-     {
-      "speaker": "representative",
-      "text": "The meter shows noticeably more electricity used at night than during the day. Is there equipment that runs overnight at your premises?",
-      "start": 40.0,
-      "end": 44.0
-     },
-     {
-      "speaker": "customer",
-      "text": "maybe the neighbors, their line runs past my wall.",
-      "start": 45.0,
-      "end": 49.0
-     },
-     {
-      "speaker": "representative",
-      "text": "Your sanctioned load is 3 kilowatts and we are seeing around 5 connected. Have you added any equipment since the connection was sanctioned?",
-      "start": 50.0,
-      "end": 54.0
-     },
-     {
-      "speaker": "customer",
-      "text": "same as always, nothing added, you have the papers, you tell me.",
-      "start": 55.0,
-      "end": 59.0
-     },
-     {
-      "speaker": "representative",
-      "text": "Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye.",
-      "start": 60.0,
-      "end": 64.0
-     }
-    ],
-    "text": "REPRESENTATIVE: Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 4 1 6 2, at your registered premises in Wanowrie. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?\nCUSTOMER: Yes, fine, tell me.\nREPRESENTATIVE: Our records show the electricity recorded at your premises fell by about 64 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?\nCUSTOMER: Why are you asking me this, I pay my bill every month, check your records.\nREPRESENTATIVE: Our records show about 5 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?\nCUSTOMER: some is used, some is not, what difference does it make?\nREPRESENTATIVE: Our meter recorded its cover being opened on 15 November 2025 and 20 January 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?\nCUSTOMER: There is construction all around here, anyone could have touch it.\nREPRESENTATIVE: The meter shows noticeably more electricity used at night than during the day. Is there equipment that runs overnight at your premises?\nCUSTOMER: maybe the neighbors, their line runs past my wall.\nREPRESENTATIVE: Your sanctioned load is 3 kilowatts and we are seeing around 5 connected. Have you added any equipment since the connection was sanctioned?\nCUSTOMER: same as always, nothing added, you have the papers, you tell me.\nREPRESENTATIVE: Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye."
-   }
-  },
-  "_hidden_truth": "EVASIVE"
- },
- "OC-MS1006754": {
-  "call_id": "OC-MS1006754",
-  "consumer_no": "MS-1006754",
-  "rule": "inspect_routine",
-  "status": "COMPLETED",
-  "turn": 5,
-  "attempts": 1,
-  "provider": "loopback",
-  "provider_call_id": "LB-OC-MS1006754",
-  "signals": [
-   "sudden_drop",
-   "load_inconsistency",
-   "repeated_tampering",
-   "night_day",
-   "excess_load"
-  ],
-  "prompts": [
-   "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 6 7 5 4, at your registered premises in Ranjangaon. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
-   "Our records show the electricity recorded at your premises fell by about 59 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?",
-   "Our records show about 14 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?",
-   "Our meter recorded its cover being opened on 18 February 2026 and 28 February 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?",
-   "The meter shows noticeably more electricity used at night than during the day. Is there equipment that runs overnight at your premises?",
-   "Your sanctioned load is 8 kilowatts and we are seeing around 14 connected. Have you added any equipment since the connection was sanctioned?",
+   "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 0 8 0 4, at your registered premises in Uruli. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
+   "Our records show the electricity recorded at your premises fell by about 80 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?",
+   "Our records show about 1 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?",
+   "Our meter recorded its cover being opened on 23 March 2026 and 27 January 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?",
    "Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye."
   ],
   "answers": [
    {
     "turn": 0,
     "text": "Alright, what is it about?",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1006754-0.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1006754-0.wav"
+    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1000804-0.wav",
+    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1000804-0.wav",
+    "confidence": null,
+    "heard": true
    },
    {
     "turn": 1,
-    "text": "Business is slow, that is all, fewer orders, less running time.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1006754-1.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1006754-1.wav"
+    "text": "No, nothing changed. If anything we are using more, we bought an air conditioner in April. The meter reading is what looks wrong to me.",
+    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1000804-1.wav",
+    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1000804-1.wav",
+    "confidence": null,
+    "heard": true
    },
    {
     "turn": 2,
-    "text": "We did put in two more machines last year, and a bigger come price up. I know I should have applied for the load increase. I kept putting it off. What is the process to fix it?",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1006754-2.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1006754-2.wav"
+    "text": "everything is connected and everything runs. I have not removed a single thing, that is why I do not understand your reading.",
+    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1000804-2.wav",
+    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1000804-2.wav",
+    "confidence": null,
+    "heard": true
    },
    {
     "turn": 3,
-    "text": "The illic Trishan opened it when we wired the new machines in, he said he had to, I did not know that was a problem.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1006754-3.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1006754-3.wav"
-   },
-   {
-    "turn": 4,
-    "text": "The come-prace are and the cold room run through the night. Yes, that is the nature of the work.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1006754-4.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1006754-4.wav"
-   },
-   {
-    "turn": 5,
-    "text": "Yes, two machines and a compressor, I want to regularize it, tell me what to do.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1006754-5.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1006754-5.wav"
+    "text": "Nobody has touched that meter. It is inside a locked box on my wall. Your own man came in June and said the seal looked fine to him.",
+    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1000804-3.wav",
+    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1000804-3.wav",
+    "confidence": null,
+    "heard": true
    }
   ],
   "consent": "granted",
   "recording": null,
   "error": "",
-  "queued_at": "2026-09-04T19:07:27+00:00",
-  "started_at": "2026-09-04T19:07:41+00:00",
-  "ended_at": "2026-09-04T19:07:55+00:00",
+  "queued_at": "2026-09-04T19:14:16+00:00",
+  "started_at": "2026-09-04T19:14:16+00:00",
+  "ended_at": "2026-09-04T19:14:26+00:00",
   "analysis": {
-   "consumer_no": "MS-1006754",
-   "risk_score": 90,
-   "recommended_before_call": "INSPECT_ROUTINE",
+   "consumer_no": "MS-1000804",
+   "risk_score": 69,
+   "recommended_before_call": "METER_TEST",
    "consent": "granted",
-   "questions_asked": 5,
-   "questions_answered": 5,
+   "questions_asked": 3,
+   "questions_answered": 3,
    "responsiveness": 1.0,
    "claims_made": [
+    "blames_meter",
     "equipment_added",
-    "business_slow",
-    "overnight_load",
-    "seeks_regularisation"
+    "no_change"
    ],
    "corroboration": [
     {
      "claim": "equipment_added",
-     "verdict": "CORROBORATED",
-     "against": "14 kW against 8 kW sanctioned",
-     "reasoning": "This is unauthorised additional load \u2014 a \u00a7126 regularisation matter, not \u00a7135 theft. Route to load regularisation with the arrears calculated from the declared date, not to enforcement."
+     "verdict": "UNTESTABLE",
+     "against": "connected load within sanction",
+     "reasoning": "Added equipment that still sits inside the sanctioned load needs no regularisation."
     },
     {
-     "claim": "overnight_load",
-     "verdict": "CORROBORATED",
-     "against": "night/day ratio 2.6",
-     "reasoning": "A declared overnight load explains the night/day signal. It should stop counting against this consumer."
-    },
-    {
-     "claim": "business_slow",
+     "claim": "no_change",
      "verdict": "CONTRADICTED",
-     "against": "night/day ratio 2.6",
-     "reasoning": "Reduced trading does not produce more consumption at night than by day. The premises is running something outside trading hours."
+     "against": "consumption down 80%",
+     "reasoning": "Nothing changed at the premises, but the recorded consumption moved substantially. Either the meter is wrong or the account is. Both are worth resolving; only one is an offence."
     }
    ],
    "contradicted_count": 1,
-   "corroborated_count": 2,
+   "corroborated_count": 0,
    "evasion_markers": [],
-   "cooperation_markers": [
-    "overnight_load",
-    "seeks_regularisation"
-   ],
+   "cooperation_markers": [],
    "vulnerability_flagged": false,
-   "disposition": "PROCEED_TO_INSPECTION",
-   "why": "The explanation offered is contradicted by the consumer's own meter: Reduced trading does not produce more consumption at night than by day. The premises is running something outside trading hours.",
-   "what_would_change_it": "A documented explanation that survives the reading \u2014 a work order, a surrender acknowledgement, a tariff change on file.",
+   "disposition": "METER_TEST_PRIORITY",
+   "why": "The consumer disputes the reading and answered the questions put to them. Consumption is down 80% with no explanation offered that the meter contradicts. A meter test settles whether the reading is real for a fraction of the cost of an inspection.",
+   "what_would_change_it": "A meter that tests correct, which would leave the consumption unexplained and put inspection back on the table.",
    "evidential_status": "Not evidence. An automated call, without caution and not before an authorised officer, cannot support a \u00a7135 prosecution or a \u00a7126 assessment. It directs where to look; the finding must come from a meter test or an inspection conducted under the Act.",
    "transcript": {
     "engine": "assembled (agent verbatim, consumer via faster-whisper)",
     "diarisation": "none needed \u2014 one recording per consumer answer",
-    "turn_count": 13,
-    "duration_seconds": 65.0,
+    "turn_count": 9,
+    "duration_seconds": 45.0,
     "turns": [
      {
       "speaker": "representative",
-      "text": "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 6 7 5 4, at your registered premises in Ranjangaon. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
+      "text": "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 0 8 0 4, at your registered premises in Uruli. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
       "start": 0.0,
       "end": 4.0
      },
@@ -329,206 +116,165 @@
      },
      {
       "speaker": "representative",
-      "text": "Our records show the electricity recorded at your premises fell by about 59 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?",
+      "text": "Our records show the electricity recorded at your premises fell by about 80 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?",
       "start": 10.0,
       "end": 14.0
      },
      {
       "speaker": "customer",
-      "text": "Business is slow, that is all, fewer orders, less running time.",
+      "text": "No, nothing changed. If anything we are using more, we bought an air conditioner in April. The meter reading is what looks wrong to me.",
       "start": 15.0,
       "end": 19.0
      },
      {
       "speaker": "representative",
-      "text": "Our records show about 14 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?",
+      "text": "Our records show about 1 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?",
       "start": 20.0,
       "end": 24.0
      },
      {
       "speaker": "customer",
-      "text": "We did put in two more machines last year, and a bigger come price up. I know I should have applied for the load increase. I kept putting it off. What is the process to fix it?",
+      "text": "everything is connected and everything runs. I have not removed a single thing, that is why I do not understand your reading.",
       "start": 25.0,
       "end": 29.0
      },
      {
       "speaker": "representative",
-      "text": "Our meter recorded its cover being opened on 18 February 2026 and 28 February 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?",
+      "text": "Our meter recorded its cover being opened on 23 March 2026 and 27 January 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?",
       "start": 30.0,
       "end": 34.0
      },
      {
       "speaker": "customer",
-      "text": "The illic Trishan opened it when we wired the new machines in, he said he had to, I did not know that was a problem.",
+      "text": "Nobody has touched that meter. It is inside a locked box on my wall. Your own man came in June and said the seal looked fine to him.",
       "start": 35.0,
       "end": 39.0
      },
      {
       "speaker": "representative",
-      "text": "The meter shows noticeably more electricity used at night than during the day. Is there equipment that runs overnight at your premises?",
+      "text": "Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye.",
       "start": 40.0,
       "end": 44.0
-     },
-     {
-      "speaker": "customer",
-      "text": "The come-prace are and the cold room run through the night. Yes, that is the nature of the work.",
-      "start": 45.0,
-      "end": 49.0
-     },
-     {
-      "speaker": "representative",
-      "text": "Your sanctioned load is 8 kilowatts and we are seeing around 14 connected. Have you added any equipment since the connection was sanctioned?",
-      "start": 50.0,
-      "end": 54.0
-     },
-     {
-      "speaker": "customer",
-      "text": "Yes, two machines and a compressor, I want to regularize it, tell me what to do.",
-      "start": 55.0,
-      "end": 59.0
-     },
-     {
-      "speaker": "representative",
-      "text": "Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye.",
-      "start": 60.0,
-      "end": 64.0
      }
     ],
-    "text": "REPRESENTATIVE: Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 6 7 5 4, at your registered premises in Ranjangaon. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?\nCUSTOMER: Alright, what is it about?\nREPRESENTATIVE: Our records show the electricity recorded at your premises fell by about 59 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?\nCUSTOMER: Business is slow, that is all, fewer orders, less running time.\nREPRESENTATIVE: Our records show about 14 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?\nCUSTOMER: We did put in two more machines last year, and a bigger come price up. I know I should have applied for the load increase. I kept putting it off. What is the process to fix it?\nREPRESENTATIVE: Our meter recorded its cover being opened on 18 February 2026 and 28 February 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?\nCUSTOMER: The illic Trishan opened it when we wired the new machines in, he said he had to, I did not know that was a problem.\nREPRESENTATIVE: The meter shows noticeably more electricity used at night than during the day. Is there equipment that runs overnight at your premises?\nCUSTOMER: The come-prace are and the cold room run through the night. Yes, that is the nature of the work.\nREPRESENTATIVE: Your sanctioned load is 8 kilowatts and we are seeing around 14 connected. Have you added any equipment since the connection was sanctioned?\nCUSTOMER: Yes, two machines and a compressor, I want to regularize it, tell me what to do.\nREPRESENTATIVE: Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye."
+    "text": "REPRESENTATIVE: Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 0 8 0 4, at your registered premises in Uruli. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?\nCUSTOMER: Alright, what is it about?\nREPRESENTATIVE: Our records show the electricity recorded at your premises fell by about 80 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?\nCUSTOMER: No, nothing changed. If anything we are using more, we bought an air conditioner in April. The meter reading is what looks wrong to me.\nREPRESENTATIVE: Our records show about 1 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?\nCUSTOMER: everything is connected and everything runs. I have not removed a single thing, that is why I do not understand your reading.\nREPRESENTATIVE: Our meter recorded its cover being opened on 23 March 2026 and 27 January 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?\nCUSTOMER: Nobody has touched that meter. It is inside a locked box on my wall. Your own man came in June and said the seal looked fine to him.\nREPRESENTATIVE: Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye."
    }
   },
-  "_hidden_truth": "ADDED_LOAD_UNDECLARED"
+  "_hidden_truth": "GENUINE_METER_FAULT"
  },
- "OC-MS1007573": {
-  "call_id": "OC-MS1007573",
-  "consumer_no": "MS-1007573",
-  "rule": "inspect_routine",
+ "OC-MS1001144": {
+  "call_id": "OC-MS1001144",
+  "consumer_no": "MS-1001144",
+  "rule": "meter_test",
   "status": "COMPLETED",
-  "turn": 5,
+  "turn": 3,
   "attempts": 1,
   "provider": "loopback",
-  "provider_call_id": "LB-OC-MS1007573",
+  "provider_call_id": "LB-OC-MS1001144",
   "signals": [
    "sudden_drop",
    "load_inconsistency",
-   "repeated_tampering",
-   "night_day",
-   "excess_load"
+   "repeated_tampering"
   ],
   "prompts": [
-   "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 7 5 7 3, at your registered premises in Hadapsar. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
-   "Our records show the electricity recorded at your premises fell by about 77 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?",
-   "Our records show about 6 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?",
-   "Our meter recorded its cover being opened on 23 November 2025 and 29 May 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?",
-   "The meter shows noticeably more electricity used at night than during the day. Is there equipment that runs overnight at your premises?",
-   "Your sanctioned load is 4 kilowatts and we are seeing around 6 connected. Have you added any equipment since the connection was sanctioned?",
+   "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 1 1 4 4, at your registered premises in Baner. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
+   "Our records show the electricity recorded at your premises fell by about 79 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?",
+   "Our records show about 5 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?",
+   "Our meter recorded its cover being opened on 09 January 2026 and 19 April 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?",
    "Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye."
   ],
   "answers": [
    {
     "turn": 0,
-    "text": "Yes, fine, tell me.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1007573-0.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1007573-0.wav"
+    "text": "Yes, go ahead.",
+    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1001144-0.wav",
+    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1001144-0.wav",
+    "confidence": null,
+    "heard": true
    },
    {
     "turn": 1,
     "text": "Honestly, I have no idea. Nothing has changed that I can think of. Same people, same Apline says. Should I be worried?",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1007573-1.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1007573-1.wav"
+    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1001144-1.wav",
+    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1001144-1.wav",
+    "confidence": null,
+    "heard": true
    },
    {
     "turn": 2,
     "text": "I think everything is in use, the fridge, fans, the pump, the television, I am not sure how to add it up.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1007573-2.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1007573-2.wav"
+    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1001144-2.wav",
+    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1001144-2.wav",
+    "confidence": null,
+    "heard": true
    },
    {
     "turn": 3,
     "text": "not that I know of, nobody told me anything, is that serious?",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1007573-3.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1007573-3.wav"
-   },
-   {
-    "turn": 4,
-    "text": "the fridge runs, and the water pump goes on around 5 in the morning, would that be it?",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1007573-4.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1007573-4.wav"
-   },
-   {
-    "turn": 5,
-    "text": "We may have, I would have to check what was there originally.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1007573-5.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1007573-5.wav"
+    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1001144-3.wav",
+    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1001144-3.wav",
+    "confidence": null,
+    "heard": true
    }
   ],
   "consent": "granted",
   "recording": null,
   "error": "",
-  "queued_at": "2026-09-04T19:07:27+00:00",
-  "started_at": "2026-09-04T19:07:55+00:00",
-  "ended_at": "2026-09-04T19:08:10+00:00",
+  "queued_at": "2026-09-04T19:14:16+00:00",
+  "started_at": "2026-09-04T19:14:26+00:00",
+  "ended_at": "2026-09-04T19:14:35+00:00",
   "analysis": {
-   "consumer_no": "MS-1007573",
-   "risk_score": 90,
-   "recommended_before_call": "INSPECT_ROUTINE",
+   "consumer_no": "MS-1001144",
+   "risk_score": 69,
+   "recommended_before_call": "METER_TEST",
    "consent": "granted",
-   "questions_asked": 5,
-   "questions_answered": 5,
+   "questions_asked": 3,
+   "questions_answered": 3,
    "responsiveness": 1.0,
    "claims_made": [
-    "overnight_load",
     "no_change",
     "denies_knowledge"
    ],
    "corroboration": [
     {
-     "claim": "overnight_load",
-     "verdict": "CORROBORATED",
-     "against": "night/day ratio 2.6",
-     "reasoning": "A declared overnight load explains the night/day signal. It should stop counting against this consumer."
-    },
-    {
      "claim": "no_change",
      "verdict": "CONTRADICTED",
-     "against": "consumption down 77%",
+     "against": "consumption down 79%",
      "reasoning": "Nothing changed at the premises, but the recorded consumption moved substantially. Either the meter is wrong or the account is. Both are worth resolving; only one is an offence."
     }
    ],
    "contradicted_count": 1,
-   "corroborated_count": 1,
+   "corroborated_count": 0,
    "evasion_markers": [
     "denies_knowledge"
    ],
-   "cooperation_markers": [
-    "overnight_load"
-   ],
+   "cooperation_markers": [],
    "vulnerability_flagged": false,
-   "disposition": "PROCEED_UNCHANGED",
-   "why": "The consumer states nothing changed, which the reading does not support \u2014 but a denial is not evidence, and this account was already ranked on signals the call did not touch. It stands where the screening put it.",
-   "what_would_change_it": "A documented explanation, or a meter test result.",
+   "disposition": "METER_TEST_PRIORITY",
+   "why": "Nothing changed at the premises on the consumer's account, yet consumption fell 79%. Either the meter is wrong or the account is, and only one of those is an offence. The meter test distinguishes them and costs a fraction of an inspection.",
+   "what_would_change_it": "A meter that tests correct, which would leave the consumption unexplained and put inspection back on the table.",
    "evidential_status": "Not evidence. An automated call, without caution and not before an authorised officer, cannot support a \u00a7135 prosecution or a \u00a7126 assessment. It directs where to look; the finding must come from a meter test or an inspection conducted under the Act.",
    "transcript": {
     "engine": "assembled (agent verbatim, consumer via faster-whisper)",
     "diarisation": "none needed \u2014 one recording per consumer answer",
-    "turn_count": 13,
-    "duration_seconds": 65.0,
+    "turn_count": 9,
+    "duration_seconds": 45.0,
     "turns": [
      {
       "speaker": "representative",
-      "text": "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 7 5 7 3, at your registered premises in Hadapsar. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
+      "text": "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 1 1 4 4, at your registered premises in Baner. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
       "start": 0.0,
       "end": 4.0
      },
      {
       "speaker": "customer",
-      "text": "Yes, fine, tell me.",
+      "text": "Yes, go ahead.",
       "start": 5.0,
       "end": 9.0
      },
      {
       "speaker": "representative",
-      "text": "Our records show the electricity recorded at your premises fell by about 77 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?",
+      "text": "Our records show the electricity recorded at your premises fell by about 79 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?",
       "start": 10.0,
       "end": 14.0
      },
@@ -540,7 +286,7 @@
      },
      {
       "speaker": "representative",
-      "text": "Our records show about 6 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?",
+      "text": "Our records show about 5 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?",
       "start": 20.0,
       "end": 24.0
      },
@@ -552,7 +298,7 @@
      },
      {
       "speaker": "representative",
-      "text": "Our meter recorded its cover being opened on 23 November 2025 and 29 May 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?",
+      "text": "Our meter recorded its cover being opened on 09 January 2026 and 19 April 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?",
       "start": 30.0,
       "end": 34.0
      },
@@ -564,120 +310,155 @@
      },
      {
       "speaker": "representative",
-      "text": "The meter shows noticeably more electricity used at night than during the day. Is there equipment that runs overnight at your premises?",
+      "text": "Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye.",
       "start": 40.0,
       "end": 44.0
-     },
-     {
-      "speaker": "customer",
-      "text": "the fridge runs, and the water pump goes on around 5 in the morning, would that be it?",
-      "start": 45.0,
-      "end": 49.0
-     },
-     {
-      "speaker": "representative",
-      "text": "Your sanctioned load is 4 kilowatts and we are seeing around 6 connected. Have you added any equipment since the connection was sanctioned?",
-      "start": 50.0,
-      "end": 54.0
-     },
-     {
-      "speaker": "customer",
-      "text": "We may have, I would have to check what was there originally.",
-      "start": 55.0,
-      "end": 59.0
-     },
-     {
-      "speaker": "representative",
-      "text": "Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye.",
-      "start": 60.0,
-      "end": 64.0
      }
     ],
-    "text": "REPRESENTATIVE: Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 7 5 7 3, at your registered premises in Hadapsar. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?\nCUSTOMER: Yes, fine, tell me.\nREPRESENTATIVE: Our records show the electricity recorded at your premises fell by about 77 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?\nCUSTOMER: Honestly, I have no idea. Nothing has changed that I can think of. Same people, same Apline says. Should I be worried?\nREPRESENTATIVE: Our records show about 6 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?\nCUSTOMER: I think everything is in use, the fridge, fans, the pump, the television, I am not sure how to add it up.\nREPRESENTATIVE: Our meter recorded its cover being opened on 23 November 2025 and 29 May 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?\nCUSTOMER: not that I know of, nobody told me anything, is that serious?\nREPRESENTATIVE: The meter shows noticeably more electricity used at night than during the day. Is there equipment that runs overnight at your premises?\nCUSTOMER: the fridge runs, and the water pump goes on around 5 in the morning, would that be it?\nREPRESENTATIVE: Your sanctioned load is 4 kilowatts and we are seeing around 6 connected. Have you added any equipment since the connection was sanctioned?\nCUSTOMER: We may have, I would have to check what was there originally.\nREPRESENTATIVE: Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye."
+    "text": "REPRESENTATIVE: Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 1 1 4 4, at your registered premises in Baner. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?\nCUSTOMER: Yes, go ahead.\nREPRESENTATIVE: Our records show the electricity recorded at your premises fell by about 79 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?\nCUSTOMER: Honestly, I have no idea. Nothing has changed that I can think of. Same people, same Apline says. Should I be worried?\nREPRESENTATIVE: Our records show about 5 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?\nCUSTOMER: I think everything is in use, the fridge, fans, the pump, the television, I am not sure how to add it up.\nREPRESENTATIVE: Our meter recorded its cover being opened on 09 January 2026 and 19 April 2026. Do you know if any work was done on the meter around then \u2014 by our staff, an electrician, or a contractor?\nCUSTOMER: not that I know of, nobody told me anything, is that serious?\nREPRESENTATIVE: Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye."
    }
   },
   "_hidden_truth": "COOPERATIVE_UNAWARE"
  },
- "OC-MS1010302": {
-  "call_id": "OC-MS1010302",
-  "consumer_no": "MS-1010302",
-  "rule": "inspect_routine",
-  "status": "REFUSED",
-  "turn": 0,
+ "OC-MS1002435": {
+  "call_id": "OC-MS1002435",
+  "consumer_no": "MS-1002435",
+  "rule": "meter_test",
+  "status": "COMPLETED",
+  "turn": 2,
   "attempts": 1,
   "provider": "loopback",
-  "provider_call_id": "LB-OC-MS1010302",
+  "provider_call_id": "LB-OC-MS1002435",
   "signals": [
    "sudden_drop",
-   "load_inconsistency",
-   "night_day",
-   "excess_load"
+   "load_inconsistency"
   ],
   "prompts": [
-   "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 1 0 3 0 2, at your registered premises in Uruli. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
-   "Understood. I am ending the call and no recording will be kept beyond this point. Your account will be handled through the normal written process, and nothing you have said will count against you. Thank you for your time."
+   "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 2 4 3 5, at your registered premises in Wanowrie. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
+   "Our records show the electricity recorded at your premises fell by about 73 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?",
+   "Our records show about 4 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?",
+   "Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye."
   ],
   "answers": [
    {
     "turn": 0,
-    "text": "I do not consent to a recording, do not call this number again.",
-    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1010302-0.wav",
-    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1010302-0.wav"
+    "text": "Alright, what is it about?",
+    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1002435-0.wav",
+    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1002435-0.wav",
+    "confidence": null,
+    "heard": true
+   },
+   {
+    "turn": 1,
+    "text": "No, nothing changed. If anything we are using more, we bought an air conditioner in April. The meter reading is what looks wrong to me.",
+    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1002435-1.wav",
+    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1002435-1.wav",
+    "confidence": null,
+    "heard": true
+   },
+   {
+    "turn": 2,
+    "text": "everything is connected and everything runs. I have not removed a single thing, that is why I do not understand your reading.",
+    "audio": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1002435-2.wav",
+    "recording_url": "/Users/shatrunjaysingh/indicus-ai-mcp-tools/services/data/outreach/turns/OC-MS1002435-2.wav",
+    "confidence": null,
+    "heard": true
    }
   ],
-  "consent": "refused",
+  "consent": "granted",
   "recording": null,
   "error": "",
-  "queued_at": "2026-09-04T19:07:27+00:00",
-  "started_at": "2026-09-04T19:08:19+00:00",
-  "ended_at": "2026-09-04T19:08:22+00:00",
+  "queued_at": "2026-09-04T19:14:16+00:00",
+  "started_at": "2026-09-04T19:14:35+00:00",
+  "ended_at": "2026-09-04T19:14:42+00:00",
   "analysis": {
-   "consumer_no": "MS-1010302",
-   "risk_score": 90,
-   "recommended_before_call": "INSPECT_ROUTINE",
-   "consent": "refused",
-   "questions_asked": 0,
-   "questions_answered": 0,
-   "responsiveness": 0.0,
-   "claims_made": [],
-   "corroboration": [],
-   "contradicted_count": 0,
+   "consumer_no": "MS-1002435",
+   "risk_score": 69,
+   "recommended_before_call": "METER_TEST",
+   "consent": "granted",
+   "questions_asked": 2,
+   "questions_answered": 2,
+   "responsiveness": 1.0,
+   "claims_made": [
+    "blames_meter",
+    "equipment_added",
+    "no_change"
+   ],
+   "corroboration": [
+    {
+     "claim": "equipment_added",
+     "verdict": "UNTESTABLE",
+     "against": "connected load within sanction",
+     "reasoning": "Added equipment that still sits inside the sanctioned load needs no regularisation."
+    },
+    {
+     "claim": "no_change",
+     "verdict": "CONTRADICTED",
+     "against": "consumption down 73%",
+     "reasoning": "Nothing changed at the premises, but the recorded consumption moved substantially. Either the meter is wrong or the account is. Both are worth resolving; only one is an offence."
+    }
+   ],
+   "contradicted_count": 1,
    "corroborated_count": 0,
    "evasion_markers": [],
    "cooperation_markers": [],
    "vulnerability_flagged": false,
-   "disposition": "PROCEED_ON_DATA_ALONE",
-   "why": "The consumer declined to be recorded. That is their right and carries no inference \u2014 the account stands exactly where the screening left it.",
-   "what_would_change_it": "Nothing. Refusal must never move the score in either direction, or the call becomes a penalty for declining it.",
+   "disposition": "METER_TEST_PRIORITY",
+   "why": "The consumer disputes the reading and answered the questions put to them. Consumption is down 73% with no explanation offered that the meter contradicts. A meter test settles whether the reading is real for a fraction of the cost of an inspection.",
+   "what_would_change_it": "A meter that tests correct, which would leave the consumption unexplained and put inspection back on the table.",
    "evidential_status": "Not evidence. An automated call, without caution and not before an authorised officer, cannot support a \u00a7135 prosecution or a \u00a7126 assessment. It directs where to look; the finding must come from a meter test or an inspection conducted under the Act.",
    "transcript": {
     "engine": "assembled (agent verbatim, consumer via faster-whisper)",
     "diarisation": "none needed \u2014 one recording per consumer answer",
-    "turn_count": 3,
-    "duration_seconds": 15.0,
+    "turn_count": 7,
+    "duration_seconds": 35.0,
     "turns": [
      {
       "speaker": "representative",
-      "text": "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 1 0 3 0 2, at your registered premises in Uruli. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
+      "text": "Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 2 4 3 5, at your registered premises in Wanowrie. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?",
       "start": 0.0,
       "end": 4.0
      },
      {
       "speaker": "customer",
-      "text": "I do not consent to a recording, do not call this number again.",
+      "text": "Alright, what is it about?",
       "start": 5.0,
       "end": 9.0
      },
      {
       "speaker": "representative",
-      "text": "Understood. I am ending the call and no recording will be kept beyond this point. Your account will be handled through the normal written process, and nothing you have said will count against you. Thank you for your time.",
+      "text": "Our records show the electricity recorded at your premises fell by about 73 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?",
       "start": 10.0,
       "end": 14.0
+     },
+     {
+      "speaker": "customer",
+      "text": "No, nothing changed. If anything we are using more, we bought an air conditioner in April. The meter reading is what looks wrong to me.",
+      "start": 15.0,
+      "end": 19.0
+     },
+     {
+      "speaker": "representative",
+      "text": "Our records show about 4 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?",
+      "start": 20.0,
+      "end": 24.0
+     },
+     {
+      "speaker": "customer",
+      "text": "everything is connected and everything runs. I have not removed a single thing, that is why I do not understand your reading.",
+      "start": 25.0,
+      "end": 29.0
+     },
+     {
+      "speaker": "representative",
+      "text": "Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye.",
+      "start": 30.0,
+      "end": 34.0
      }
     ],
-    "text": "REPRESENTATIVE: Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 1 0 3 0 2, at your registered premises in Uruli. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?\nCUSTOMER: I do not consent to a recording, do not call this number again.\nREPRESENTATIVE: Understood. I am ending the call and no recording will be kept beyond this point. Your account will be handled through the normal written process, and nothing you have said will count against you. Thank you for your time."
+    "text": "REPRESENTATIVE: Good morning. This is an automated call from the electricity distribution company regarding consumer number M S 1 0 0 2 4 3 5, at your registered premises in Wanowrie. You are speaking to an automated system, not a person. This call is being recorded. It is about your meter reading, and it will take about two minutes. May I continue?\nCUSTOMER: Alright, what is it about?\nREPRESENTATIVE: Our records show the electricity recorded at your premises fell by about 73 percent compared with last year. Has anything changed at the premises \u2014 the equipment you use, the number of people there, or how often it is open?\nCUSTOMER: No, nothing changed. If anything we are using more, we bought an air conditioner in April. The meter reading is what looks wrong to me.\nREPRESENTATIVE: Our records show about 4 kilowatts of equipment connected at your premises. Is all of that still in use, or has some of it been removed or left idle?\nCUSTOMER: everything is connected and everything runs. I have not removed a single thing, that is why I do not understand your reading.\nREPRESENTATIVE: Thank you. Nothing has been decided about your account on this call, and nothing you have said is treated as an admission of anything. What you have told me will be checked against our records. If a meter test or a site visit is needed you will be given notice in writing, and you will have the right to be heard before any assessment is raised. If you have documents, please bring them to your subdivision office. Goodbye."
    }
   },
-  "_hidden_truth": "REFUSES"
+  "_hidden_truth": "GENUINE_METER_FAULT"
  }
 }
