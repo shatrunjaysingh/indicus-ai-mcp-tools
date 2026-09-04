@@ -471,9 +471,16 @@ CLAIM_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
                          "shut the unit down", "locked since",
                          "place is locked", "main switch is off",
                          "nothing is running", "nothing running")),
+    # A described symptom, not a complaint about the utility. "The display has
+    # been blank for weeks" is a fact the consumer observed at their own
+    # premises; "your machine is wrong" is an assertion anybody makes when
+    # challenged, and the two were the same claim until an evasive consumer
+    # deflecting five times in a row was routed to a meter test on the
+    # strength of it.
     ("meter_defective", ("display has been blank", "display is blank",
-                         "meter is dead", "mostly it is dead",
-                         "reading is what looks wrong", "your machine is wrong")),
+                         "meter is dead", "mostly it is dead")),
+    ("blames_meter", ("reading is what looks wrong", "your machine is wrong",
+                      "that is your equipment")),
     ("load_surrendered", ("surrendered", "load surrender",
                           "machines were sold", "we reduced")),
     ("tariff_changed", ("domestic tariff", "shop closed")),
@@ -753,7 +760,9 @@ def _disposition(c, meta, contradicted, corroborated, evasion, cooperation,
     hard = [x for x in contradicted if x.claim != "no_change"]
     weak_only = bool(contradicted) and not hard
 
-    if "meter_defective" in claims and not hard:
+    disputes_meter = "meter_defective" in claims or "blames_meter" in claims
+
+    if "meter_defective" in claims and not hard and not evasion:
         return ("METER_TEST_PRIORITY",
                 "The consumer reports a blank or dead display, and the "
                 "consumption pattern is consistent with under-recording. The "
@@ -774,6 +783,21 @@ def _disposition(c, meta, contradicted, corroborated, evasion, cooperation,
                 "order, a surrender acknowledgement, a tariff change on file.")
 
     if weak_only:
+        # Disputing the reading, without deflecting, is worth a meter test on
+        # any band — it is cheaper than an inspection and it is conclusive.
+        # Disputing it while deflecting everything else is not: "your machine
+        # is wrong" is what anybody says when challenged.
+        if disputes_meter and not evasion:
+            return ("METER_TEST_PRIORITY",
+                    f"The consumer disputes the reading and answered the "
+                    f"questions put to them. Consumption is down "
+                    f"{c.consumption_drop_pct:.0f}% with no explanation "
+                    f"offered that the meter contradicts. A meter test settles "
+                    f"whether the reading is real for a fraction of the cost "
+                    f"of an inspection.",
+                    "A meter that tests correct, which would leave the "
+                    "consumption unexplained and put inspection back on the "
+                    "table.")
         # A denial on an account with physical evidence behind it does not
         # move anything. A denial on a metering-pattern account is a reason to
         # test the meter, which is the cheaper and more conclusive step.
