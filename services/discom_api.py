@@ -765,12 +765,16 @@ def export_list(segment: str | None = None, min_chronic_risk: float = 0,
     name = f"defaulters-{stamp}.csv"
     path = exports / name
 
+    # Ten columns for someone working the book. The behavioural inputs —
+    # on_time_ratio, days_since_last_payment, broken_promises — explain the
+    # score rather than direct the action, and getConsumerScore returns all of
+    # them for any single account. has_open_dispute and dc_blocked_by stay:
+    # one says do not pursue this at all, the other says disconnection is not
+    # lawfully available yet.
     columns = [
         "consumer_no", "division", "category", "segment", "outstanding",
         "payment_probability", "expected_recovery", "chronic_risk",
-        "unpaid_cycles", "days_since_last_payment", "on_time_ratio",
-        "notices_ignored", "broken_promises", "has_open_dispute",
-        "dc_eligible", "dc_blocked_by",
+        "has_open_dispute", "dc_blocked_by",
     ]
 
     rows = 0
@@ -1096,24 +1100,15 @@ def td_export(min_priority: int = 0, division: str | None = None,
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     name = f"td-recovery-{stamp}.csv"
     path = exports / name
-    # Fifteen columns, for someone working the list rather than auditing the
-    # model. Dropped along the way:
-    #   pre_td_on_time_ratio, notices_responded — model inputs nobody acts on
-    #   restoration_suspected — it is consumption_after_td_kwh > 0; the raw
-    #                           number says more than the flag
-    #   recovery_probability  — encoded in expected_recovery, which is the
-    #                           figure anyone actually sorts on
-    #   statute_barred_amount, disputed_amount — visible as the gap between
-    #                           outstanding and recoverable_amount. Where that
-    #                           gap matters legally, getTDRecoveryScore breaks
-    #                           it down per account.
+    # Eleven columns, for someone working the list rather than auditing the
+    # model. Everything an officer needs to decide the visit and nothing that
+    # only explains the score — getTDRecoveryScore returns the full record for
+    # any single account, including the deductions, meter state, execution
+    # record and post-disconnection consumption.
     columns = [
         "consumer_no", "division", "subdivision", "category",
-        "recovery_priority", "expected_recovery",
-        "recoverable_amount", "outstanding",
-        "td_days", "executed_and_acknowledged", "meter_status",
-        "survey_finding", "consumption_after_td_kwh",
-        "notices_served", "pd_recommended",
+        "recovery_priority", "expected_recovery", "recoverable_amount",
+        "td_days", "survey_finding", "notices_served", "pd_recommended",
     ]
     rows = 0
     recoverable = 0.0
@@ -1362,12 +1357,16 @@ def screening_export(min_risk: int = 45, division: str | None = None,
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     name = f"inspection-list-{stamp}.csv"
     path = exports / name
+    # Nine columns for an enforcement wing. The seven signal values belong to
+    # the case file, not the worklist, and getAnomalyRiskScore returns them
+    # with each signal's contribution. bypass_indicator stays because it is
+    # physical evidence and changes what the team looks for; documented_reason
+    # stays because a consumer with a recorded explanation must be visible as
+    # such on the list itself.
     columns = [
         "consumer_no", "division", "subdivision", "category", "anomaly_risk",
-        "recommended", "consumption_drop_pct", "load_factor_ratio",
-        "tamper_events_12m", "night_day_ratio", "peer_deviation_pct",
-        "bypass_indicator", "connected_load_kw", "sanctioned_load_kw",
-        "documented_reason", "risk_before_suppression",
+        "recommended", "tamper_events_12m", "bypass_indicator",
+        "documented_reason",
     ]
     rows = 0
     preview: list[dict] = []
@@ -1775,11 +1774,14 @@ def restoration_export(min_risk: int = 70, include_blocked: bool = False) -> dic
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     name = f"restoration-cases-{stamp}.csv"
     path = exports / name
+    # Nine columns. The four figures a case rests on stay — disconnection age,
+    # the consumption after it, and what it was before — because those are the
+    # case. consumption_basis and restoration_blocked_by stay because a row
+    # built on estimated reads is not a case at all, and an officer needs to
+    # see that on the line rather than discover it at the premises.
     columns = ["consumer_no", "division", "subdivision", "restoration_risk",
                "td_days", "consumption_after_td_kwh", "pre_td_monthly_avg",
-               "consumption_basis", "restart_period",
-               "executed_and_acknowledged", "meter_status", "survey_finding",
-               "payment_near_restart", "restoration_blocked_by", "outstanding"]
+               "consumption_basis", "restoration_blocked_by"]
     rows = 0
     preview: list[dict] = []
     with path.open("w", newline="") as fh:
@@ -2033,12 +2035,15 @@ def complaints_export(sla_status: str | None = None,
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     name = f"complaints-{stamp}.csv"
     path = exports / name
-    columns = ["complaint_id", "consumer_no", "division", "channel",
-               "received", "category", "priority", "department",
-               "likely_cause", "recommended_action", "sla_hours",
-               "hours_elapsed", "hours_remaining", "sla_status",
-               "escalation_risk", "is_repeat", "prior_complaints",
-               "prior_closed_without_visit", "safety_override", "resolved"]
+    # Twelve columns for a supervisor working the queue. sla_hours and
+    # hours_elapsed are dropped because hours_remaining is what anyone sorts
+    # on; getComplaintTriage carries the full clock for one complaint.
+    # safety_override and prior_closed_without_visit stay — those are the two
+    # facts that change what happens next.
+    columns = ["complaint_id", "consumer_no", "division", "received",
+               "category", "priority", "department", "hours_remaining",
+               "sla_status", "escalation_risk", "safety_override",
+               "prior_closed_without_visit"]
     rows = 0
     preview: list[dict] = []
     with path.open("w", newline="") as fh:
@@ -2305,12 +2310,14 @@ def calls_export(conduct_flag: str | None = None,
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     name = f"call-reviews-{stamp}.csv"
     path = exports / name
+    # Eleven columns for a quality reviewer. The four behaviour flags are
+    # aggregated per agent by getAgentPerformance, which is where they are
+    # actually read; here they would be nineteen columns of mostly TRUE.
+    # record_discrepancy stays because it is the finding of the call.
     columns = ["call_id", "consumer_no", "agent_id", "received",
-               "duration_sec", "stated_intent", "actual_intent",
-               "intent_reframed", "resolved", "reference_given",
-               "identity_verified", "record_checked", "outcome_recorded",
+               "actual_intent", "intent_reframed", "resolved",
                "commitment_made", "conduct_flag", "record_discrepancy",
-               "deflectable", "linked_complaint", "followed_up"]
+               "followed_up"]
     rows = 0
     preview: list[dict] = []
     with path.open("w", newline="") as fh:
@@ -2593,14 +2600,15 @@ def fleet_export(min_risk: int = 0, band: str | None = None) -> dict:
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     name = f"asset-risk-{stamp}.csv"
     path = exports / name
+    # Eleven columns for a maintenance planner. The condition series that
+    # produced the score — loading, thermal trend, imbalance, trip history —
+    # are on getAssetRisk for any single asset, and are not what someone
+    # scheduling a month of visits sorts on. risk_known stays: an asset with no
+    # telemetry is unknown risk rather than low, and hiding that in a bulk file
+    # is how the unmonitored part of a network gets forgotten.
     columns = ["asset_id", "asset_type", "division", "subdivision",
-               "rating_kva", "installed_year", "failure_risk", "risk_band",
-               "primary_driver", "risk_known", "telemetry", "peak_load_pct",
-               "load_trend_6m", "oil_temp_c", "oil_temp_trend_6m",
-               "phase_imbalance_pct", "months_since_maintenance",
-               "failures_3y", "trips_90d", "no_fault_found_trips_90d",
-               "consumers_served", "alternative_feed", "consequence_score",
-               "inspect_within_days"]
+               "failure_risk", "risk_band", "primary_driver", "risk_known",
+               "consequence_score", "consumers_served", "inspect_within_days"]
     rows = 0
     preview: list[dict] = []
     with path.open("w", newline="") as fh:
