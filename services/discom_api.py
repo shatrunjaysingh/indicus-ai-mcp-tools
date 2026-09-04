@@ -771,10 +771,14 @@ def export_list(segment: str | None = None, min_chronic_risk: float = 0,
     # them for any single account. has_open_dispute and dc_blocked_by stay:
     # one says do not pursue this at all, the other says disconnection is not
     # lawfully available yet.
+    # unpaid_cycles and notices_ignored stay. They are what decides the rung
+    # of the ladder: three missed cycles after a clean record is a different
+    # case from twelve, and an account that has ignored four notices will not
+    # be moved by a fifth.
     columns = [
         "consumer_no", "division", "category", "segment", "outstanding",
         "payment_probability", "expected_recovery", "chronic_risk",
-        "has_open_dispute", "dc_blocked_by",
+        "unpaid_cycles", "notices_ignored", "has_open_dispute", "dc_blocked_by",
     ]
 
     rows = 0
@@ -1100,14 +1104,19 @@ def td_export(min_priority: int = 0, division: str | None = None,
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     name = f"td-recovery-{stamp}.csv"
     path = exports / name
-    # Eleven columns, for someone working the list rather than auditing the
-    # model. Everything an officer needs to decide the visit and nothing that
-    # only explains the score — getTDRecoveryScore returns the full record for
-    # any single account, including the deductions, meter state, execution
-    # record and post-disconnection consumption.
+    # recovery_probability is not derivable in any useful sense and must stay.
+    # It was removed once on the reasoning that expected_recovery encodes it —
+    # true only if you divide two columns in a spreadsheet, and useless at the
+    # moment it matters. A ₹9 lakh case at 0.2 and a ₹3 lakh case at 0.9 carry
+    # similar expected recovery and are completely different visits: one is a
+    # long shot worth attempting for the size of it, the other is money that
+    # will almost certainly come in. An officer deciding how to spend an hour
+    # needs both factors on the line, which is what "recovery probability ×
+    # recoverable amount" means.
     columns = [
         "consumer_no", "division", "subdivision", "category",
-        "recovery_priority", "expected_recovery", "recoverable_amount",
+        "recovery_priority", "recovery_probability", "recoverable_amount",
+        "expected_recovery",
         "td_days", "survey_finding", "notices_served", "pd_recommended",
     ]
     rows = 0
@@ -1363,9 +1372,14 @@ def screening_export(min_risk: int = 45, division: str | None = None,
     # physical evidence and changes what the team looks for; documented_reason
     # stays because a consumer with a recorded explanation must be visible as
     # such on the list itself.
+    # The signal values stay. A score alone tells an inspector to go; it does
+    # not tell them what to look for, and "consumption down 62%" and "45 kW
+    # connected against 30 kW sanctioned" lead to completely different visits —
+    # the second is a §126 load case that can be settled from the meter board.
     columns = [
         "consumer_no", "division", "subdivision", "category", "anomaly_risk",
-        "recommended", "tamper_events_12m", "bypass_indicator",
+        "recommended", "consumption_drop_pct", "tamper_events_12m",
+        "bypass_indicator", "connected_load_kw", "sanctioned_load_kw",
         "documented_reason",
     ]
     rows = 0
@@ -1779,9 +1793,17 @@ def restoration_export(min_risk: int = 70, include_blocked: bool = False) -> dic
     # case. consumption_basis and restoration_blocked_by stay because a row
     # built on estimated reads is not a case at all, and an officer needs to
     # see that on the line rather than discover it at the premises.
+    # executed_and_acknowledged should never have come out: without it the
+    # disconnection may never have happened, and then there is no offence and
+    # the row is a records failure rather than a case. meter_status decides
+    # what an inspector looks for — there is no point checking a pole
+    # termination where the meter was removed. payment_near_restart is the
+    # innocent explanation, and survey_finding is the site evidence.
     columns = ["consumer_no", "division", "subdivision", "restoration_risk",
                "td_days", "consumption_after_td_kwh", "pre_td_monthly_avg",
-               "consumption_basis", "restoration_blocked_by"]
+               "consumption_basis", "executed_and_acknowledged",
+               "meter_status", "survey_finding", "payment_near_restart",
+               "restoration_blocked_by"]
     rows = 0
     preview: list[dict] = []
     with path.open("w", newline="") as fh:
@@ -2040,9 +2062,14 @@ def complaints_export(sla_status: str | None = None,
     # on; getComplaintTriage carries the full clock for one complaint.
     # safety_override and prior_closed_without_visit stay — those are the two
     # facts that change what happens next.
+    # likely_cause and recommended_action stay. They are what triage adds over
+    # a routing rule — they tell the receiving team what to look at first, and
+    # for a billing complaint they separate a fast meter from catch-up billing,
+    # which are the same sentence from the consumer and different jobs.
     columns = ["complaint_id", "consumer_no", "division", "received",
-               "category", "priority", "department", "hours_remaining",
-               "sla_status", "escalation_risk", "safety_override",
+               "category", "priority", "department", "likely_cause",
+               "recommended_action", "hours_remaining", "sla_status",
+               "escalation_risk", "is_repeat", "safety_override",
                "prior_closed_without_visit"]
     rows = 0
     preview: list[dict] = []
@@ -2314,10 +2341,14 @@ def calls_export(conduct_flag: str | None = None,
     # aggregated per agent by getAgentPerformance, which is where they are
     # actually read; here they would be nineteen columns of mostly TRUE.
     # record_discrepancy stays because it is the finding of the call.
+    # reference_given and record_checked stay. Resolution is judged on
+    # outcome, and a call ending without a reference number is not resolved
+    # however it sounded; record_checked is the behaviour that produces — or
+    # fails to produce — the discrepancies in the next column.
     columns = ["call_id", "consumer_no", "agent_id", "received",
                "actual_intent", "intent_reframed", "resolved",
-               "commitment_made", "conduct_flag", "record_discrepancy",
-               "followed_up"]
+               "reference_given", "record_checked", "commitment_made",
+               "conduct_flag", "record_discrepancy", "followed_up"]
     rows = 0
     preview: list[dict] = []
     with path.open("w", newline="") as fh:
@@ -2606,9 +2637,16 @@ def fleet_export(min_risk: int = 0, band: str | None = None) -> dict:
     # scheduling a month of visits sorts on. risk_known stays: an asset with no
     # telemetry is unknown risk rather than low, and hiding that in a bulk file
     # is how the unmonitored part of a network gets forgotten.
+    # Keeps the conditions a planner acts on. oil_temp_trend_6m is the
+    # degradation signature the whole use case leads on; no_fault_found_trips
+    # is the intermittent-fault signature; months_since_maintenance is the one
+    # number that says "overdue". alternative_feed changes how bad an outage
+    # here would be. The raw series behind them stay on getAssetRisk.
     columns = ["asset_id", "asset_type", "division", "subdivision",
                "failure_risk", "risk_band", "primary_driver", "risk_known",
-               "consequence_score", "consumers_served", "inspect_within_days"]
+               "peak_load_pct", "oil_temp_trend_6m", "months_since_maintenance",
+               "no_fault_found_trips_90d", "consequence_score",
+               "consumers_served", "alternative_feed", "inspect_within_days"]
     rows = 0
     preview: list[dict] = []
     with path.open("w", newline="") as fh:
