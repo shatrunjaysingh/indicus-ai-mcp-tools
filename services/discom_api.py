@@ -1051,6 +1051,12 @@ def td_field_plan(capacity: int = 0, division: str | None = None,
         and a.recovery_priority >= min_priority
         and (division is None or a.division == division)
     ]
+    # Break ties on the money. Priority is a percentile, so 200 accounts sit at
+    # 100 spanning a fourfold range of expected recovery — without this the
+    # order inside a band is whatever the heap produced, and a nine-lakh case
+    # can miss a 2,500-visit plan while a two-lakh one makes it.
+    pool.sort(key=lambda a: (-a.recovery_priority,
+                             -a.recoverable_amount * a.recovery_probability))
     selected = pool[:cap]
     expected = sum(a.recoverable_amount * a.recovery_probability for a in selected)
     cost = len(selected) * td.FIELD_COST_PER_VISIT
@@ -1090,14 +1096,24 @@ def td_export(min_priority: int = 0, division: str | None = None,
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     name = f"td-recovery-{stamp}.csv"
     path = exports / name
+    # Fifteen columns, for someone working the list rather than auditing the
+    # model. Dropped along the way:
+    #   pre_td_on_time_ratio, notices_responded — model inputs nobody acts on
+    #   restoration_suspected — it is consumption_after_td_kwh > 0; the raw
+    #                           number says more than the flag
+    #   recovery_probability  — encoded in expected_recovery, which is the
+    #                           figure anyone actually sorts on
+    #   statute_barred_amount, disputed_amount — visible as the gap between
+    #                           outstanding and recoverable_amount. Where that
+    #                           gap matters legally, getTDRecoveryScore breaks
+    #                           it down per account.
     columns = [
         "consumer_no", "division", "subdivision", "category",
-        "recovery_priority", "recovery_probability", "outstanding",
-        "recoverable_amount", "statute_barred_amount", "disputed_amount",
+        "recovery_priority", "expected_recovery",
+        "recoverable_amount", "outstanding",
         "td_days", "executed_and_acknowledged", "meter_status",
-        "survey_finding", "consumption_after_td_kwh", "restoration_suspected",
-        "notices_served", "notices_responded", "pre_td_on_time_ratio",
-        "pd_recommended",
+        "survey_finding", "consumption_after_td_kwh",
+        "notices_served", "pd_recommended",
     ]
     rows = 0
     recoverable = 0.0
@@ -1112,7 +1128,15 @@ def td_export(min_priority: int = 0, division: str | None = None,
                 continue
             if pd_candidates_only and not a.pd_recommended:
                 continue
-            record = {c: getattr(a, c) for c in columns}
+            # The product the use case is framed on: "focus where recovery
+            # probability x recoverable amount is highest". Both factors and
+            # the percentile were exported and this was not, so the first
+            # question anyone asks of the list — what is it worth — needed a
+            # spreadsheet formula. The percentile also cannot answer it: 200
+            # accounts tie at 100 and span a fourfold range of value.
+            record = {c: getattr(a, c, None) for c in columns}
+            record["expected_recovery"] = round(
+                a.recoverable_amount * a.recovery_probability, 2)
             writer.writerow(record)
             rows += 1
             recoverable += a.recoverable_amount
