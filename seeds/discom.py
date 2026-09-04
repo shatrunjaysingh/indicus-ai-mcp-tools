@@ -1066,12 +1066,24 @@ async def main() -> None:
                 if created.status_code not in (200, 201):
                     print(f"   {name} failed:", created.text[:200])
                     continue
-                action = "created"
+                agent_id = created.json()["id"]
+                # Creating an agent does not deploy it. Without this a brand
+                # new agent sits at deployed_version=None — it exists, it is
+                # listed, it has its tools and its skill, and it cannot run.
+                # The bug stayed hidden while the ten original agents were
+                # only ever *updated*, and surfaced the first time one was
+                # added.
+                deployed = await c.post(f"/agents/{agent_id}/deploy", json={})
+                if deployed.status_code not in (200, 201):
+                    print(f"   {name} created but deploy failed:",
+                          deployed.text[:200])
+                    continue
+                action = "created + deployed"
 
             # Read back rather than trusting what was sent. Everything above
             # can report success and leave an agent pointing at tools that no
             # longer exist, which is exactly what happened.
-            check = (await c.get(f"/agents/{agent_id if name in registry else created.json()['id']}")).json()
+            check = (await c.get(f"/agents/{agent_id}")).json()
             stored = check.get("config", {}).get("custom_tool_ids", [])
             live = [t for t in stored if t in live_tool_ids]
             flag = "" if len(live) == len(config["custom_tool_ids"]) else "  <-- MISMATCH"
