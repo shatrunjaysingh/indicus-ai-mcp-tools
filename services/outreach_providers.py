@@ -1,145 +1,264 @@
-"""How a call actually gets placed.
+"""Telephony adapters. One interface, several vendors, chosen by configuration.
 
-The demo does not dial anyone. It renders the conversation to audio and runs it
-through the same transcriber a real recording would go through, so everything
-downstream — transcription, corroboration, disposition — is exercised for real
-against audio that was really synthesised and really recognised, recognition
-errors included.
+A call here is turn-based: the provider speaks a prompt, records the consumer's
+answer, posts it back, and we return the next prompt. That is not a compromise
+— it is the right shape for this work. The questions come from a fixed plan
+derived from the signals that fired on the account, there is a natural pause
+after each one, and the provider records the whole call for free. Real-time
+media streaming buys conversational fluidity that a five-question diagnostic
+questionnaire does not need, and costs a WebSocket audio path, streaming STT,
+streaming TTS and barge-in handling.
 
-That is a deliberate choice about what to fake. Faking the *telephony* costs
-the demo nothing: the pipeline never sees a difference between a WAV that came
-off a PSTN leg and one that came out of `say`. Faking the *transcript* would
-have cost it everything, because then the analysis would be reading text that
-was never spoken and the demo would prove nothing about whether it works.
+So an adapter has to do four things, and each is a small translation of the
+same idea into the vendor's dialect:
 
-The provider interface below is the real seam. `SimulatedProvider` implements
-it today; `ExotelProvider` and `TwilioProvider` are written out to the point
-where the missing piece is credentials and a media-streaming handler, and they
-refuse rather than pretend when those are absent. Anyone wiring a real trunk in
-replaces one class and changes nothing else.
+    originate      start a call, return the vendor's id for it
+    say_and_record speak this text, record the reply, then POST to next_url
+    say_and_hangup speak this text and end the call
+    fetch          pull the finished recording down as a file
 
-BEFORE A REAL TRUNK IS CONNECTED
---------------------------------
-- **DLT registration** and an approved header, per TRAI TCCCPR 2018.
-- **Calling window** 09:00-21:00 IST for transactional calls.
-- **Recording disclosure** in the opening, before anything is retained — the
-  script already carries it and it must not be trimmed for call time.
-- **Automated-system disclosure**, likewise in the opening.
-- **DPDP Act 2023**: voice is personal data, and the stated purpose has to be
-  the actual purpose. "Meter reading verification" while screening for theft
-  is the kind of drafting that loses a case.
-- **Indic ASR.** `transcribe.py` runs `base.en`. Maharashtra consumers answer
-  in Marathi and Hindi, and an English-only model transcribing Marathi does not
-  fail loudly — it returns fluent, confident, wrong English, and every layer
-  above it believes the words. This is the single largest gap between this
-  pipeline and a production one.
+`LoopbackProvider` implements all four without a trunk and is the default. It
+is not a mock: it drives the real state machine through the real webhook
+handlers with real rendered audio, so everything except the phone network is
+exercised. Swapping to a vendor changes environment variables.
+
+WHAT IS AND IS NOT TESTED
+-------------------------
+Loopback is exercised end to end here. The Twilio adapter is written against
+TwiML and is the one to reach for first with real credentials. The Exotel
+adapter is written from its documented call flow and has not been run against
+the service — it is marked as such rather than presented as equivalent, because
+an adapter nobody has dialled through is a hypothesis.
 """
 
 from __future__ import annotations
 
-import os
+import base64
+import json
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass
-class PlacedCall:
-    call_id: str
-    consumer_no: str
-    status: str            # COMPLETED | REFUSED | NO_ANSWER | FAILED
-    recording: Path | None
-    provider: str
-    note: str = ""
+class Instruction:
+    """What the provider should do next, before it is put into a dialect."""
+    body: str
+    media_type: str
 
 
-class CallProvider(Protocol):
+class VoiceProvider(Protocol):
     name: str
+    tested: bool
 
-    def place(self, consumer_no: str, script: list[tuple[str, str]],
-              call_id: str) -> PlacedCall: ...
+    def originate(self, to: str, call_id: str, answer_url: str,
+                  status_url: str) -> str: ...
+    def say_and_record(self, text: str, next_url: str,
+                       max_seconds: int) -> Instruction: ...
+    def say_and_hangup(self, text: str) -> Instruction: ...
+    def recording_url(self, payload: dict) -> str | None: ...
+    def fetch(self, url: str, dest: Path) -> Path: ...
 
 
-class SimulatedProvider:
-    """Renders the call to a two-channel recording instead of dialling.
+def _post_form(url: str, data: dict, auth: tuple[str, str] | None = None) -> dict:
+    body = urllib.parse.urlencode(data).encode()
+    req = urllib.request.Request(url, data=body, method="POST")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    if auth:
+        token = base64.b64encode(f"{auth[0]}:{auth[1]}".encode()).decode()
+        req.add_header("Authorization", f"Basic {token}")
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        raw = resp.read().decode()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {"raw": raw}
 
-    Produces exactly what a contact-centre recorder produces: agent on the left
-    channel, consumer on the right. `transcribe.py` reads it without knowing
-    the difference.
+
+def _xml(text: str) -> str:
+    """Escape for a TwiML/Exotel text node.
+
+    Consumer numbers are spoken digit by digit and division names carry
+    apostrophes; an unescaped ampersand in a prompt takes down the whole
+    response with a parse error at the vendor rather than here.
+    """
+    return (text.replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+# --------------------------------------------------------------------------
+
+
+class LoopbackProvider:
+    """Runs the whole flow with no trunk. The default, and genuinely useful.
+
+    It does not stub the state machine out — it posts to the same webhook
+    handlers a vendor would, so queueing, turn sequencing, the calling window,
+    retries, recording assembly, transcription and analysis all run exactly as
+    they will in production. The only thing absent is the phone network.
     """
 
-    name = "simulated"
+    name = "loopback"
+    tested = True
 
-    def __init__(self, out_dir: Path, voices: dict[str, str]):
-        self.out_dir = out_dir
-        self.voices = voices
+    def __init__(self, settings: Any = None) -> None:
+        self.settings = settings
 
-    def place(self, consumer_no: str, script: list[tuple[str, str]],
-              call_id: str) -> PlacedCall:
-        import audio
+    def originate(self, to: str, call_id: str, answer_url: str,
+                  status_url: str) -> str:
+        # The runtime drives loopback turns itself; there is nothing to dial.
+        return f"LB-{call_id}"
 
-        missing = audio.have_tools()
-        if missing:
-            return PlacedCall(call_id, consumer_no, "FAILED", None, self.name,
-                              f"{missing} is not on PATH")
+    def say_and_record(self, text: str, next_url: str,
+                       max_seconds: int) -> Instruction:
+        return Instruction(json.dumps({
+            "action": "say_and_record", "text": text,
+            "next": next_url, "max_seconds": max_seconds}), "application/json")
 
-        work = self.out_dir.parent / ".outreach-work"
-        work.mkdir(parents=True, exist_ok=True)
-        dest = self.out_dir / f"{call_id}.wav"
-        try:
-            audio.build_two_channel(
-                script, self.voices, left_speaker="agent",
-                dest=dest, work=work, stem=call_id)
-        except Exception as exc:  # noqa: BLE001
-            return PlacedCall(call_id, consumer_no, "FAILED", None, self.name,
-                              str(exc)[:200])
-        finally:
-            for leftover in work.glob(f"{call_id}-*"):
-                leftover.unlink(missing_ok=True)
+    def say_and_hangup(self, text: str) -> Instruction:
+        return Instruction(json.dumps({
+            "action": "say_and_hangup", "text": text}), "application/json")
 
-        status = "REFUSED" if _refused(script) else "COMPLETED"
-        return PlacedCall(call_id, consumer_no, status, dest, self.name)
+    def recording_url(self, payload: dict) -> str | None:
+        return payload.get("RecordingUrl")
+
+    def fetch(self, url: str, dest: Path) -> Path:
+        # Loopback recordings are already on disk; the "url" is the path.
+        return Path(url)
 
 
-def _refused(script: list[tuple[str, str]]) -> bool:
-    return any("do not consent" in t.lower() or "not talking to a machine" in t.lower()
-               for _, t in script)
+class TwilioProvider:
+    """TwiML. The fastest route to a call you can actually hear.
 
-
-class _RealProvider:
-    """Shared shape for the trunk-backed providers.
-
-    Neither is finished, and both say so rather than degrading to the simulator
-    — a provider that silently produces synthetic audio when its credentials
-    are missing would put fabricated consumer speech into an enforcement file.
+    A trial account will dial verified numbers today, which is enough to prove
+    the whole loop before anyone starts a procurement conversation.
     """
 
-    name = "unset"
-    env_keys: tuple[str, ...] = ()
-
-    def __init__(self) -> None:
-        self.missing = [k for k in self.env_keys if not os.environ.get(k)]
-
-    def place(self, consumer_no: str, script, call_id: str) -> PlacedCall:
-        raise NotImplementedError(
-            f"{self.name} needs {', '.join(self.env_keys)} and a media-stream "
-            f"handler that bridges the trunk to STT and TTS. Missing: "
-            f"{', '.join(self.missing) or 'nothing — implement place()'}. "
-            f"Until then use SimulatedProvider; it exercises every stage after "
-            f"the audio arrives."
-        )
-
-
-class ExotelProvider(_RealProvider):
-    """Indian trunk, DLT-aware. The usual choice for a DISCOM."""
-    name = "exotel"
-    env_keys = ("EXOTEL_SID", "EXOTEL_TOKEN", "EXOTEL_CALLER_ID")
-
-
-class TwilioProvider(_RealProvider):
-    """Available everywhere; DLT and Indian numbering need arranging separately."""
     name = "twilio"
-    env_keys = ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER")
+    tested = False
+
+    API = "https://api.twilio.com/2010-04-01/Accounts/{sid}/Calls.json"
+
+    def __init__(self, settings: Any) -> None:
+        self.sid = settings.values["TWILIO_ACCOUNT_SID"]
+        self.token = settings.values["TWILIO_AUTH_TOKEN"]
+        self.from_number = settings.values["TWILIO_FROM_NUMBER"]
+
+    def originate(self, to: str, call_id: str, answer_url: str,
+                  status_url: str) -> str:
+        result = _post_form(
+            self.API.format(sid=self.sid),
+            {"To": to, "From": self.from_number, "Url": answer_url,
+             "StatusCallback": status_url,
+             "StatusCallbackEvent": "completed",
+             # A consumer who does not pick up in 30 seconds is not going to.
+             # Longer just holds a concurrency slot open.
+             "Timeout": "30",
+             "MachineDetection": "Enable"},
+            auth=(self.sid, self.token))
+        return result.get("sid", "")
+
+    def say_and_record(self, text: str, next_url: str,
+                       max_seconds: int) -> Instruction:
+        return Instruction(
+            f'<?xml version="1.0" encoding="UTF-8"?><Response>'
+            f'<Say voice="Polly.Aditi" language="en-IN">{_xml(text)}</Say>'
+            f'<Record action="{_xml(next_url)}" method="POST" '
+            f'maxLength="{max_seconds}" timeout="4" playBeep="false" '
+            f'trim="trim-silence" />'
+            f'</Response>', "application/xml")
+
+    def say_and_hangup(self, text: str) -> Instruction:
+        return Instruction(
+            f'<?xml version="1.0" encoding="UTF-8"?><Response>'
+            f'<Say voice="Polly.Aditi" language="en-IN">{_xml(text)}</Say>'
+            f'<Hangup/></Response>', "application/xml")
+
+    def recording_url(self, payload: dict) -> str | None:
+        url = payload.get("RecordingUrl")
+        return f"{url}.wav" if url else None
+
+    def fetch(self, url: str, dest: Path) -> Path:
+        req = urllib.request.Request(url)
+        token = base64.b64encode(f"{self.sid}:{self.token}".encode()).decode()
+        req.add_header("Authorization", f"Basic {token}")
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            dest.write_bytes(resp.read())
+        return dest
 
 
-PROVIDERS = {p.name: p for p in (SimulatedProvider, ExotelProvider, TwilioProvider)}
+class ExotelProvider:
+    """Indian trunk with DLT registration. The one a DISCOM pilot ends on.
+
+    NOT YET RUN against a live account. Exotel drives calls through App Bazaar
+    flows rather than returning markup inline the way TwiML does, so the
+    `say_and_record` shape below is the documented equivalent and not a
+    verified one. Treat the first real call as a debugging session, and do not
+    let this class's existence imply it has been tested.
+    """
+
+    name = "exotel"
+    tested = False
+
+    def __init__(self, settings: Any) -> None:
+        v = settings.values
+        self.sid = v["EXOTEL_SID"]
+        self.token = v["EXOTEL_TOKEN"]
+        self.caller_id = v["EXOTEL_CALLER_ID"]
+        self.subdomain = v["EXOTEL_SUBDOMAIN"]
+
+    def originate(self, to: str, call_id: str, answer_url: str,
+                  status_url: str) -> str:
+        url = (f"https://{self.subdomain}/v1/Accounts/{self.sid}"
+               f"/Calls/connect.json")
+        result = _post_form(url, {
+            "From": to, "CallerId": self.caller_id, "Url": answer_url,
+            "StatusCallback": status_url, "TimeLimit": "600",
+            "TimeOut": "30"}, auth=(self.sid, self.token))
+        return (result.get("Call") or {}).get("Sid", "")
+
+    def say_and_record(self, text: str, next_url: str,
+                       max_seconds: int) -> Instruction:
+        return Instruction(
+            f'<?xml version="1.0" encoding="UTF-8"?><Response>'
+            f'<Say>{_xml(text)}</Say>'
+            f'<Record action="{_xml(next_url)}" maxLength="{max_seconds}" '
+            f'finishOnKey="#" />'
+            f'</Response>', "application/xml")
+
+    def say_and_hangup(self, text: str) -> Instruction:
+        return Instruction(
+            f'<?xml version="1.0" encoding="UTF-8"?><Response>'
+            f'<Say>{_xml(text)}</Say><Hangup/></Response>', "application/xml")
+
+    def recording_url(self, payload: dict) -> str | None:
+        return payload.get("RecordingUrl")
+
+    def fetch(self, url: str, dest: Path) -> Path:
+        req = urllib.request.Request(url)
+        token = base64.b64encode(f"{self.sid}:{self.token}".encode()).decode()
+        req.add_header("Authorization", f"Basic {token}")
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            dest.write_bytes(resp.read())
+        return dest
+
+
+ADAPTERS: dict[str, type] = {
+    "loopback": LoopbackProvider,
+    "twilio": TwilioProvider,
+    "exotel": ExotelProvider,
+}
+
+
+def build(config) -> VoiceProvider:
+    """The provider the configuration selects. The only place a vendor is named."""
+    adapter = ADAPTERS.get(config.provider)
+    if adapter is None:
+        raise KeyError(
+            f"No adapter for {config.provider!r}. Have: {', '.join(ADAPTERS)}")
+    problems = config.blocking_problems()
+    if problems:
+        raise RuntimeError("Cannot start calling:\n  - " + "\n  - ".join(problems))
+    return adapter(config.settings)

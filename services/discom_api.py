@@ -27,7 +27,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 
 # Where this deployment is reachable from a browser, so an export link can be
@@ -3146,3 +3146,137 @@ def outreach_check_claim(consumer_no: str, claim: str) -> dict:
         "sanctioned_load_kw": c.sanctioned_load_kw,
     }
     return out
+
+
+# --- outbound calling: configuration, launch, and the provider webhooks -----
+# The queue/release split is the approval gate. Queueing writes call records
+# and dials nothing; releasing is the action with an effect in the world, and
+# it is a separate call so a person can be the one who makes it.
+
+
+@app.get("/outreach/config", operation_id="getCallingConfiguration",
+         summary="The active telephony configuration and anything blocking it")
+def outreach_config_route() -> dict:
+    """What provider is configured, whether it can dial, and what is missing.
+
+    `blocking_problems` is the whole list rather than the first failure, so an
+    operator setting this up sees everything at once instead of discovering it
+    across four attempts.
+    """
+    import outreach_config as cfgmod
+    import outreach_providers as provs
+
+    cfg = cfgmod.load()
+    described = cfg.describe()
+    adapter = provs.ADAPTERS.get(cfg.provider)
+    described["adapter_tested"] = bool(getattr(adapter, "tested", False))
+    described["available_providers"] = sorted(provs.ADAPTERS)
+    described["note"] = (
+        "Provider is chosen by OUTREACH_PROVIDER and needs no code change. "
+        "loopback runs the full state machine with no trunk. Until "
+        "OUTREACH_ALLOW_LIVE=true, every call is pinned to OUTREACH_TEST_NUMBER "
+        "— which is what stops a rule matching thousands of accounts from "
+        "auto-dialling real consumers.")
+    return described
+
+
+@app.post("/outreach/campaign/queue", operation_id="queueCallingCampaign",
+          summary="Create the call records for a campaign. Dials nothing.")
+def outreach_queue(rule: str = "meter_test", limit: int = 10) -> dict:
+    """Propose a campaign. Nothing is dialled until it is released."""
+    import outreach_runtime as rt
+
+    try:
+        return rt.queue_campaign(rule=rule, limit=limit)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/outreach/campaign/release", operation_id="releaseCallingCampaign",
+          summary="Start calling the consumers a queued campaign selected")
+def outreach_release(rule: str | None = None,
+                     max_calls: int | None = None) -> dict:
+    """Begin dialling. This is the step with an effect in the world.
+
+    Refuses rather than partially proceeding when the configuration is
+    incomplete, and reports every reason at once.
+    """
+    import outreach_runtime as rt
+
+    result = rt.pump(rule=rule, max_calls=max_calls)
+    if result.get("blocked_by"):
+        raise HTTPException(status_code=409, detail=result["blocked_by"])
+    return result
+
+
+@app.get("/outreach/live", operation_id="listLiveCalls",
+         summary="Every call in the store with its current state")
+def outreach_live(rule: str | None = None, status: str | None = None) -> dict:
+    """Where each call has got to. Includes queued calls not yet dialled."""
+    import outreach_runtime as rt
+
+    calls = rt.all_calls(rule)
+    if status:
+        calls = [c for c in calls if c.status == status.upper()]
+    counts: dict[str, int] = {}
+    for c in calls:
+        counts[c.status] = counts.get(c.status, 0) + 1
+    return {
+        "total": len(calls),
+        "by_status": counts,
+        "calls": [
+            {"call_id": c.call_id, "consumer_no": c.consumer_no,
+             "rule": c.rule, "status": c.status, "attempts": c.attempts,
+             "consent": c.consent, "turns_spoken": len(c.prompts),
+             "answers_captured": len(c.answers),
+             "provider": c.provider,
+             "disposition": (c.analysis or {}).get("disposition"),
+             "error": c.error or None}
+            for c in calls
+        ],
+    }
+
+
+# --- provider webhooks -----------------------------------------------------
+# Not tools. These are called by the telephony vendor, not by an agent, and
+# putting them in the tool schema would invite a model to answer a phone call.
+
+
+@app.post("/outreach/voice/answer", include_in_schema=False)
+async def voice_answer(call_id: str) -> Response:
+    import outreach_runtime as rt
+
+    instruction = rt.on_answer(call_id)
+    return Response(content=instruction.body, media_type=instruction.media_type)
+
+
+@app.post("/outreach/voice/turn", include_in_schema=False)
+async def voice_turn(request: Request, call_id: str, turn: int) -> Response:
+    import outreach_runtime as rt
+
+    # Vendors post form-encoded; accept JSON too so a curl test is possible.
+    try:
+        form = await request.form()
+        payload = {k: str(v) for k, v in form.items()}
+    except Exception:  # noqa: BLE001
+        payload = {}
+    if not payload:
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+
+    instruction = rt.on_turn(call_id, turn, payload)
+    return Response(content=instruction.body, media_type=instruction.media_type)
+
+
+@app.post("/outreach/voice/status", include_in_schema=False)
+async def voice_status(request: Request, call_id: str) -> dict:
+    import outreach_runtime as rt
+
+    try:
+        form = await request.form()
+        payload = {k: str(v) for k, v in form.items()}
+    except Exception:  # noqa: BLE001
+        payload = {}
+    return rt.on_status(call_id, payload)

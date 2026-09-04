@@ -4,6 +4,10 @@ description: >
   Places automated outbound calls to screened consumers, records them, and analyses what was said against the consumer's own meter data. Use to find the explanation the utility's records do not hold, to clear accounts before an inspector is dispatched, or to review what a completed calling campaign established.
 allowed-tools:
   - listOutreachRules
+  - getCallingConfiguration
+  - listLiveCalls
+  - queueCallingCampaign
+  - releaseCallingCampaign
   - getOutreachCampaign
   - getOutreachCall
   - checkClaimAgainstMeter
@@ -141,3 +145,35 @@ For an individual call, give:
 Any answer covering more than one call ends with a download. Call
 `exportOutreachCalls` and give the `download_url`, the row count, and what the
 filter was. An officer cannot action a campaign from a paragraph.
+
+
+## 8. Placing calls — queue and release are different actions
+
+`queueCallingCampaign` writes the call records and **dials nobody**. Queue
+freely: it is how you show someone what a rule selected before anything
+happens.
+
+`releaseCallingCampaign` **places real calls to real people.** Never call it
+because a request sounded like it implied calling. Call it when the operator
+has asked for calling to start, in those terms.
+
+Before releasing, show them:
+
+- the target list and how many consumers it is
+- `getCallingConfiguration` — in particular the `dialling` line, which says
+  whether every call is pinned to a test number or going to live consumer
+  numbers. Confusing those two is the difference between a rehearsal and
+  phoning several thousand consumers about suspected theft.
+- `blocking_problems`, if any. Report all of them at once; they are collected
+  for that reason.
+
+If the rule is `score_100` or `inspect_urgent`, the tip-off warning goes in the
+same message, before the release, not after it.
+
+`listLiveCalls` shows where every call has got to, queued ones included. Call
+states are `QUEUED`, `DIALING`, `IN_PROGRESS`, `COMPLETED`, `REFUSED`,
+`NO_ANSWER` and `FAILED`. `NO_ANSWER` is retried; `REFUSED` never is — a
+consumer who declined once must not be dialled again by a retry loop.
+
+A release that returns fewer calls than the campaign holds is not a fault.
+Concurrency is capped, and the remainder stay queued for the next release.

@@ -364,6 +364,59 @@ _FOLLOW_UP = {
 }
 
 
+def answer_for(truth: str, signal: str, rng: random.Random) -> tuple[str, bool]:
+    """One consumer reply, and whether it actually addressed the question.
+
+    Split out of `converse` so a turn-based call can ask one question at a time
+    and get the next reply, rather than rendering a whole conversation up
+    front. A real trunk works that way and so must the loopback that stands in
+    for it, or the loopback stops proving anything about the real path.
+    """
+    bank = _ANSWERS.get(truth, {}).get(signal)
+    if not bank:
+        return (rng.choice(["I could not say.", "I do not know about that.",
+                            "You would have to check that at your end."]), False)
+    return (rng.choice(bank), True)
+
+
+def opening_line(c: Any) -> str:
+    return (
+        f"Good morning. This is an automated call from the electricity "
+        f"distribution company regarding consumer number "
+        f"{_spell(c.consumer_no)}, at your registered premises in "
+        f"{c.subdivision}. You are speaking to an automated system, not a "
+        f"person. This call is being recorded. It is about your meter reading, "
+        f"and it will take about two minutes. May I continue?")
+
+
+CLOSING_LINE = (
+    "Thank you. Nothing has been decided about your account on this call, "
+    "and nothing you have said is treated as an admission of anything. What "
+    "you have told me will be checked against our records. If a meter test "
+    "or a site visit is needed you will be given notice in writing, and you "
+    "will have the right to be heard before any assessment is raised. If "
+    "you have documents, please bring them to your subdivision office. "
+    "Goodbye.")
+
+REFUSAL_CLOSE = (
+    "Understood. I am ending the call and no recording will be kept "
+    "beyond this point. Your account will be handled through the normal "
+    "written process, and nothing you have said will count against you. "
+    "Thank you for your time.")
+
+# What a consumer declining sounds like, however they phrase it. Checked
+# against the *recognised* answer to the opening, so a refusal is honoured even
+# though nobody typed it into a menu.
+REFUSAL_MARKERS = ("do not consent", "don't consent", "not talking to a machine",
+                   "do not call", "don't call", "not interested", "no thank",
+                   "send me a letter", "remove my number")
+
+
+def refused_consent(text: str) -> bool:
+    low = text.lower()
+    return any(m in low for m in REFUSAL_MARKERS)
+
+
 def converse(c: Any, questions: list[Question], rng: random.Random,
              truth: str) -> tuple[list[tuple[str, str]], dict]:
     """The full call, as [(speaker, text)], plus what happened procedurally.

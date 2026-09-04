@@ -52,6 +52,23 @@ def _get(name: str, desc: str, path: str, params: dict[str, str] | None = None,
     }
 
 
+def _post(name: str, desc: str, path: str,
+          query: dict[str, str] | None = None) -> dict:
+    """One POST tool.
+
+    Used only where the call changes something. Queueing a campaign writes
+    records and releasing one starts dialling real people; neither belongs on a
+    verb that a client, a proxy or a model is entitled to retry on its own.
+    """
+    props = {k: {"type": "string", "description": v} for k, v in (query or {}).items()}
+    return {
+        "name": name, "description": desc, "method": "POST",
+        "url_template": DISCOM_API + path,
+        "param_locations": {k: "query" for k in (query or {})},
+        "input_schema": {"type": "object", "properties": props, "required": []},
+    }
+
+
 _C = {"consumer_no": "e.g. DL-4471002, CM-8890145"}
 
 TOOLS = [
@@ -508,6 +525,32 @@ TOOLS = [
          "/outreach/export", None,
          {"rule": "the campaign to export", "limit": "default 10",
           "disposition": "filter to one disposition; omit for all"}),
+
+    # --- placing the calls -------------------------------------------------
+    _get("getCallingConfiguration",
+         "Which telephony provider is active, whether it can dial, whether "
+         "calls are pinned to a test number, the calling window, and every "
+         "reason a campaign would not start.",
+         "/outreach/config"),
+    _get("listLiveCalls",
+         "Every call in the store with its current state, including queued "
+         "calls that have not been dialled.",
+         "/outreach/live", None,
+         {"rule": "filter to one campaign",
+          "status": "QUEUED | DIALING | IN_PROGRESS | COMPLETED | REFUSED | "
+                    "NO_ANSWER | FAILED"}),
+    _post("queueCallingCampaign",
+          "Creates the call records for a campaign and dials nothing. Use to "
+          "propose a campaign for someone to approve.",
+          "/outreach/campaign/queue",
+          {"rule": "meter_test | inspect_routine | score_100 | inspect_urgent "
+                   "| monitor | suppressed", "limit": "default 10"}),
+    _post("releaseCallingCampaign",
+          "Starts calling the consumers a queued campaign selected. This is "
+          "the step that places real calls — never call it without the "
+          "operator asking for it in those terms.",
+          "/outreach/campaign/release",
+          {"rule": "restrict to one campaign", "max_calls": "cap this batch"}),
 ]
 
 TOOL_NAMES = {t["name"] for t in TOOLS}
@@ -519,6 +562,8 @@ AGENTS = [
         ["consumer-outreach-calls"],
         ["listOutreachRules", "getOutreachCampaign", "getOutreachCall",
          "checkClaimAgainstMeter", "exportOutreachCalls",
+         "getCallingConfiguration", "listLiveCalls", "queueCallingCampaign",
+         "releaseCallingCampaign",
          "getAnomalyRiskScore", "getConsumer", "getConsumptionHistory",
          "getMeterStatus"],
         "You call consumers the screening flagged, and work out what the "
@@ -545,7 +590,12 @@ AGENTS = [
         "call warns them before the inspection.\n\n"
         "Lead a campaign report with diverted_from_inspection and say what "
         "still has to happen before each one counts. End any multi-call answer "
-        "with exportOutreachCalls and give the download link.",
+        "with exportOutreachCalls and give the download link.\n\n"
+        "queueCallingCampaign writes call records and dials nothing. "
+        "releaseCallingCampaign places real calls. Queue freely; release only "
+        "when the operator has asked for calling to start in those words, and "
+        "show them the target list and getCallingConfiguration first — "
+        "particularly whether dialling is pinned to a test number or live.",
     ),
     (
         "payment", "Revenue & Collection AI", "deep",
