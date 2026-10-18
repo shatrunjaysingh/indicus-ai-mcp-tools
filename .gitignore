@@ -24,6 +24,7 @@ services/_forecast_cache.json
 .venv-audio/
 services/data/
 services/_outreach_cache.json
+services/_battery_cache.pickle
 
 # Telephony credentials. Never committed.
 .env
