@@ -37,7 +37,7 @@ from fastapi.routing import APIRoute
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
-from services import discom_api, iam_api, payer_api, soc_api, utility_api
+from services import battery_api, discom_api, iam_api, payer_api, soc_api, utility_api
 
 # mount path -> the FastAPI app serving it.
 SERVICES: dict[str, FastAPI] = {
@@ -46,6 +46,7 @@ SERVICES: dict[str, FastAPI] = {
     "payer": payer_api.app,
     "iam": iam_api.app,
     "discom": discom_api.app,
+    "battery": battery_api.app,
 }
 
 mcp: MCPServer = MCPServer(
@@ -54,7 +55,9 @@ mcp: MCPServer = MCPServer(
         "Fixtures for the Indicus demos. SOC tools cover alert triage, threat "
         "intelligence, asset inventory and identity. Utility tools cover field "
         "visits, accounts, billing, meter readings and grid events. Payer and "
-        "IAM tools cover claims and access certification."
+        "IAM tools cover claims and access certification. Battery tools cover a "
+        "battery maker's warranty claims, field readings, factory retests and "
+        "production records."
     ),
 )
 
