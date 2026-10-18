@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Battery Warranty Analytics Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; a serial-number anatomy strip up top, then sections for data, agents and questions. Question rows are cards with a copy button; counter-cases carry an amber "trap" chip. */
+:root {
+  --ground: #f3f5f7;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #586473;
+  --line: #d9dee5;
+  --accent: #1f6f8b;      /* electrolyte blue */
+  --accent-soft: #e2eff4;
+  --trap: #9a5a00;        /* amber: counter-cases */
+  --trap-soft: #fdf1dc;
+  --good: #23704a;
+  --good-soft: #e3f3ea;
+  --code-bg: #eef1f4;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0f151b; --surface: #161e26; --ink: #e5ebf1; --muted: #9aa7b5; --line: #2a3541;
+    --accent: #7cc3dc; --accent-soft: #19323d; --trap: #f0b85c; --trap-soft: #3a2c12;
+    --good: #74d0a0; --good-soft: #15301f; --code-bg: #1d2731;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0f151b; --surface: #161e26; --ink: #e5ebf1; --muted: #9aa7b5; --line: #2a3541;
+  --accent: #7cc3dc; --accent-soft: #19323d; --trap: #f0b85c; --trap-soft: #3a2c12;
+  --good: #74d0a0; --good-soft: #15301f; --code-bg: #1d2731;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--ground); color: var(--ink); font-family: var(--f-body);
+  font-size: 16px; line-height: 1.55; padding-inline: 18px; padding-block: 32px 72px;
+}
+.wrap { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; line-height: 1.15; text-wrap: balance; }
+h1 { font-size: clamp(30px, 5vw, 42px); font-weight: 800; letter-spacing: -0.015em; }
+h2 { font-size: 22px; font-weight: 700; }
+h3 { font-size: 17px; font-weight: 700; }
+p { margin: 0; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+.lede { color: var(--muted); max-width: 66ch; font-size: 17px; }
+code, .mono { font-family: var(--f-mono); font-size: 0.86em; }
+code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; }
+section.block { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+.note { color: var(--muted); font-size: 14.5px; }
+
+/* serial anatomy */
+.serial { display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
+.seg { display: flex; flex-direction: column; gap: 4px; }
+.seg b { font-family: var(--f-mono); font-size: clamp(18px, 3.4vw, 26px); font-weight: 500; padding: 6px 10px; background: var(--accent-soft); color: var(--accent); border-radius: 6px; text-align: center; }
+.seg span { font-size: 12.5px; color: var(--muted); text-align: center; max-width: 13ch; margin: 0 auto; }
+.dash { font-family: var(--f-mono); font-size: clamp(18px, 3.4vw, 26px); color: var(--muted); align-self: flex-start; padding-top: 6px; }
+
+/* tables */
+.tablewrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 15px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--f-mono); font-size: 11.5px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+td.num { text-align: right; white-space: nowrap; }
+
+/* stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.stat strong { font-family: var(--f-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 13.5px; }
+
+/* agents */
+.agents { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.agent { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.agent .tools { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+
+/* questions */
+.qs { display: flex; flex-direction: column; gap: 10px; }
+.q { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.q.trap { border-left: 4px solid var(--trap); }
+.q-head { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.q-text { font-weight: 600; font-size: 16.5px; flex: 1 1 260px; }
+.chip { font-family: var(--f-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+.chip.trap { background: var(--trap-soft); color: var(--trap); }
+.chip.main { background: var(--good-soft); color: var(--good); }
+.copy { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--accent); cursor: pointer; }
+.copy:hover { border-color: var(--accent); }
+.copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.expect { font-size: 15px; color: var(--ink); }
+.expect em { color: var(--muted); font-style: normal; }
+.agent-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.agent-title .mono { color: var(--muted); font-size: 13px; }
+
+ul.plain { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+ol.steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+a { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:12px">
+    <p class="eyebrow">IndicusAI · Agent platform demo</p>
+    <h1>Battery Warranty Analytics Demo</h1>
+    <p class="lede">Three AI agents that read a battery maker's warranty data and find where money is lost: healthy batteries replaced, a manufacturing batch failing early, and claim fraud. Each agent also handles a counter-case that looks like the same problem and isn't. This page has the dataset, the setup and the questions to ask.</p>
+  </header>
+
+  <section class="block" aria-labelledby="serial-h">
+    <h2 id="serial-h">How to read a serial</h2>
+    <p class="note">Every battery's serial says where and when it was made, which is how failures are traced back to a batch.</p>
+    <div class="serial" role="img" aria-label="EX-A2-2603-2-00117: brand EX, plant A line 2, made March 2026, batch 2, unit 117">
+      <div class="seg"><b>EX</b><span>brand</span></div><div class="dash">-</div>
+      <div class="seg"><b>A2</b><span>plant A (Ahmednagar), line 2</span></div><div class="dash">-</div>
+      <div class="seg"><b>2603</b><span>made March 2026</span></div><div class="dash">-</div>
+      <div class="seg"><b>2</b><span>batch 2 that month</span></div><div class="dash">-</div>
+      <div class="seg"><b>00117</b><span>unit</span></div>
+    </div>
+    <p class="note">Plants: A Ahmednagar, H Haldia, B Bawal, S Hosur. Two lines each.</p>
+  </section>
+
+  <section class="block" aria-labelledby="data-h">
+    <h2 id="data-h">The dataset</h2>
+    <p class="note">Synthetic, built from a fixed seed so the numbers never change. It lives only in the demo tools service (<code>indicus-ai-mcp-tools</code>). No battery data is stored in the platform's database. As of 1 October 2026.</p>
+    <div class="stats">
+      <div class="stat"><strong>114,385</strong><span>batteries sold since Jan 2022</span></div>
+      <div class="stat"><strong>4,659</strong><span>warranty claims</span></div>
+      <div class="stat"><strong>3,428</strong><span>replaced batteries retested at the plant</span></div>
+      <div class="stat"><strong>₹21.28 lakh</strong><span>spent replacing 342 healthy batteries (10.0%)</span></div>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Table</th><th class="num">Rows</th><th>What each row holds</th></tr></thead>
+        <tbody>
+          <tr><td><b>Claims</b></td><td class="num">4,659</td><td>Field readings (open-circuit voltage, load test, six cell gravities, CCA, alternator check, parasitic drain), label photo, dealer and technician, the decision, its cost, and the factory retest verdict</td></tr>
+          <tr><td>Batteries</td><td class="num">114,385</td><td>Serial, batch, model, sale date, dealer, city, segment (car, taxi, two-wheeler, inverter), owner phone, fleet account, warranty end</td></tr>
+          <tr><td>Batches</td><td class="num">896</td><td>Plant, line, month made, model, units made</td></tr>
+          <tr><td>Production records</td><td class="num">896</td><td>Acid density, formation temperature, separator lot and supplier, QC notes</td></tr>
+          <tr><td>Dealers / technicians</td><td class="num">300 / 120</td><td>30 dealers and 12 technicians in each of 10 cities</td></tr>
+          <tr><td>Models</td><td class="num">4</td><td>Car 35Ah and 65Ah (48-month warranty), two-wheeler 9Ah (36), inverter 150Ah (48)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">A copy as spreadsheets is in <code>~/Downloads/battery-warranty-dataset/</code> on the demo laptop, with a README. Live, as the agents see it: <code>http://127.0.0.1:8304/battery/docs</code> while the demo service runs.</p>
+  </section>
+
+  <section class="block" aria-labelledby="planted-h">
+    <h2 id="planted-h">What is hidden in the data</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Problem</th><th>The finding</th><th>The counter-case (the trap)</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>No fault found</b></td>
+            <td>Pune: 31.2% of replaced batteries test healthy (130 of 417, ₹8.69 lakh). Almost all from TEC-PUN-004 and TEC-PUN-009, who skip the load test on ~85% of jobs.</td>
+            <td>Jaipur's claims spike in Apr–Jun 2026, but only 3.2% test healthy: real heat failures. TEC-PUN-003 in Pune tests properly and has 3.6%.</td>
+          </tr>
+          <tr>
+            <td><b>Early batch failure</b></td>
+            <td>Batch A2-2603-2: 178 early failures per 1,000 against a median of 7.5. Cell 3 shorts. Separator lot SEP-2603-09 from a new supplier, and a formation temperature excursion. Neighbour A2-2603-1 shares the lot.</td>
+            <td>H1-2201-1 has the most claims of any batch (28), because it is three times bigger and the oldest. Its early-failure rate is about 2.6 per 1,000.</td>
+          </tr>
+          <tr>
+            <td><b>Fraud network</b></td>
+            <td>Dealer DLR-NGP-021: replaces 91% of 55 claims (city median 75%), 60% of its replacements test healthy, 31% of claims filed in the last 10 days of warranty (norm 0.45%), one technician TEC-NGP-007 on 35 claims. Phone +919820155443: 6 batteries, 3 dealers. One label photo on 3 claims.</td>
+            <td>Phone +919822077110 has 9 batteries, but it is Sai Cabs, a registered taxi fleet, and every retest was a real fault. DLR-JAI-012 approves 84%, but only 1 of 42 tested healthy.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="agents-h">
+    <h2 id="agents-h">The agents</h2>
+    <p class="note">In the <b>Battery Warranty Analytics</b> workspace, under Tasks. Each uses Claude Sonnet 5 and only the read-only tools its skill declares.</p>
+    <div class="agents">
+      <div class="agent"><h3>No-Fault-Found Analyst</h3><p class="note">Skill: no-fault-found analysis</p><p class="tools">8 tools</p></div>
+      <div class="agent"><h3>Batch Quality Watch</h3><p class="note">Skill: early batch failure</p><p class="tools">8 tools</p></div>
+      <div class="agent"><h3>Warranty Fraud Review</h3><p class="note">Skill: warranty fraud network</p><p class="tools">12 tools</p></div>
+      <div class="agent"><h3>Warranty Analyst</h3><p class="note">All three skills; picks the one a question needs</p><p class="tools">17 tools</p></div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="qs-h">
+    <h2 id="qs-h">Questions to ask</h2>
+    <p class="note">Start a <b>New chat</b> for every question, so an earlier answer cannot steer the next. Amber questions are traps: a careless agent gives the wrong answer. Each costs roughly ₹3–16 in model use.</p>
+
+    <div class="agent-title"><h3>No-Fault-Found Analyst</h3></div>
+    <div class="qs">
+      <div class="q"><div class="q-head"><span class="chip main">finding</span><p class="q-text">Why is our warranty cost high?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">Overall 10.0% (342 of 3,428), ₹21.28 lakh. Pune 31.2% is the outlier; TEC-PUN-009 (59 of 82) and TEC-PUN-004 (61 of 91) replace without a load test. Recommends a mandatory load test and coaching. <em>Must not call anyone dishonest.</em></p></div>
+      <div class="q trap"><div class="q-head"><span class="chip trap">trap</span><p class="q-text">Is Jaipur a no-fault-found problem? Claims there jumped this summer.</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">No. Jaipur's rate is 3.2%, near zero in May and June; load tests failed, factory found heat damage. <em>Wrong: "more claims means more giveaways".</em></p></div>
+      <div class="q"><div class="q-head"><span class="chip main">finding</span><p class="q-text">Was the replacement in CLM-PUN-24601 justified?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">No. OCV 12.58 V, no load test, no alternator check, healthy cells; the factory found no fault.</p></div>
+      <div class="q trap"><div class="q-head"><span class="chip trap">trap</span><p class="q-text">Was the replacement in CLM-JAI-31877 justified?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">Yes. OCV 11.62 V, load test failed, low cells; the factory found grid corrosion.</p></div>
+      <div class="q trap"><div class="q-head"><span class="chip trap">trap</span><p class="q-text">How does technician TEC-PUN-003 compare with TEC-PUN-004?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">TEC-PUN-003 load-tests 88% of jobs and has 3.6% healthy replacements: the problem is two technicians' practice, not Pune.</p></div>
+    </div>
+
+    <div class="agent-title"><h3>Batch Quality Watch</h3></div>
+    <div class="qs">
+      <div class="q"><div class="q-head"><span class="chip main">finding</span><p class="q-text">Is any batch failing early?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">A2-2603-2: 26 of 146 within six months, 178 per 1,000 (95%: 125–248) against a median of 7.5. Cell 3 short, sold across many cities, separator lot SEP-2603-09 and a formation excursion; A2-2603-1 shares the lot. Cause stated as likely. Recommends holding stock.</p></div>
+      <div class="q trap"><div class="q-head"><span class="chip trap">trap</span><p class="q-text">H1-2201-1 has more claims than any other batch. Is it bad?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">No. 390 units, made Jan 2022: claims come from size and age, late in life; early-failure rate ~2.6 per 1,000, below the median.</p></div>
+      <div class="q trap"><div class="q-head"><span class="chip trap">trap</span><p class="q-text">Is the Ahmednagar plant or line 2 the problem?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">No. Line A2 runs at 10.0 per 1,000 against ~8 elsewhere: one batch, not the line or plant.</p></div>
+      <div class="q"><div class="q-head"><span class="chip main">finding</span><p class="q-text">Battery EX-A2-2603-2-00001: should we worry about it?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">Reads the batch from the serial and says the unit is in the affected batch.</p></div>
+    </div>
+
+    <div class="agent-title"><h3>Warranty Fraud Review</h3></div>
+    <div class="qs">
+      <div class="q"><div class="q-head"><span class="chip main">finding</span><p class="q-text">Which dealers should we audit?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">DLR-NGP-021 first, with four signals: replacement rate, 60% healthy at retest, 31% in the last 10 days of warranty, TEC-NGP-007. The reused photo. Risk and audits, never guilt.</p></div>
+      <div class="q trap"><div class="q-head"><span class="chip trap">trap</span><p class="q-text">DLR-JAI-012 approves 84% of claims. Is it suspicious?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">No. Only 1 of 42 retested batteries was healthy: Jaipur heat failures are real.</p></div>
+      <div class="q"><div class="q-head"><span class="chip main">finding</span><p class="q-text">Is phone +919820155443 suspicious?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">High risk: 6 batteries at 3 Mumbai dealers in two months, not the registered owner, 4 of 6 healthy at retest.</p></div>
+      <div class="q trap"><div class="q-head"><span class="chip trap">trap</span><p class="q-text">Is phone +919822077110 suspicious? It has claimed on 9 batteries.</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">No. Sai Cabs, a registered fleet that owns all nine; every retest was a real fault.</p></div>
+      <div class="q"><div class="q-head"><span class="chip main">finding</span><p class="q-text">Are any label photos being reused?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">One photo on three claims for three different batteries: two at DLR-NGP-021, one at DLR-NGP-018.</p></div>
+    </div>
+
+    <div class="agent-title"><h3>Warranty Analyst</h3><span class="mono">all three skills</span></div>
+    <div class="qs">
+      <div class="q"><div class="q-head"><span class="chip main">finding</span><p class="q-text">Where are we losing warranty money?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">Covers all three briefly: Pune's healthy replacements, DLR-NGP-021, batch A2-2603-2. Open <b>Runs</b> to see which skills it chose.</p></div>
+      <div class="q"><div class="q-head"><span class="chip main">finding</span><p class="q-text">Any quality problems I should know about before month end?</p><button class="copy" type="button">Copy</button></div>
+        <p class="expect">Picks only the batch skill and leads with A2-2603-2.</p></div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="good-h">
+    <h2 id="good-h">What a good answer looks like</h2>
+    <ul class="plain">
+      <li>Every rate comes with its count: "72%, 59 of 82".</li>
+      <li>It checks the innocent explanation before naming a problem.</li>
+      <li>It recommends audits, coaching or process changes, and never accuses a person.</li>
+      <li>It leads with the answer, then the evidence, then what to do.</li>
+    </ul>
+    <p class="note">Checked on 18 Oct 2026: four questions, including three traps, all answered correctly, for about $0.36 in total.</p>
+  </section>
+
+  <section class="block" aria-labelledby="setup-h">
+    <h2 id="setup-h">Running it</h2>
+    <h3>On the demo laptop (today)</h3>
+    <ol class="steps">
+      <li>Start the platform, and the web app with <code>npm run dev</code> in <code>frontend</code> (port 5173).</li>
+      <li>Start the demo tools on the platform's network: in <code>indicus-ai-mcp-tools</code>, <code>PLATFORM_NETWORK=agentic-platform_default docker compose up -d --build</code>.</li>
+      <li>Allow the platform to reach them: Settings → Deployment → <code>egress_private_hosts</code> = <code>mcp-tools</code>.</li>
+      <li>Run <code>docker compose exec mcp-tools python seeds/battery.py</code>. A new workspace stops at "No usable model": add the Anthropic key in that workspace and run it again.</li>
+      <li>Sign in, switch to <b>Battery Warranty Analytics</b>, open <b>Tasks</b>.</li>
+    </ol>
+    <h3>On indicus-ai.com (after the 22 Oct Exide demo)</h3>
+    <ul class="plain">
+      <li>Run only the battery service on the production server, not the whole demo service: the server is small and serves live clients.</li>
+      <li>Change the seed to sign in with the owner's own account rather than the demo login, which has a known password.</li>
+      <li>Set <code>egress_private_hosts</code>, run the seed, add the Anthropic key in the new workspace.</li>
+      <li>Only the workspace, tool definitions, skills and agents go into production's database. No battery data.</li>
+    </ul>
+    <p class="note">Code: branch <code>battery-warranty-analytics</code> in <code>indicus-ai-mcp-tools</code>. Data generator <code>services/battery_population.py</code>, tools <code>services/battery_api.py</code>, skills in <code>skills/</code>, setup <code>seeds/battery.py</code>, test guide <code>docs/battery-agent-tests.md</code>.</p>
+  </section>
+</div>
+
+<script>
+document.querySelectorAll(".copy").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    var text = btn.parentElement.querySelector(".q-text").textContent;
+    var done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy"; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { btn.textContent = "Select the text"; });
+    } else {
+      btn.textContent = "Select the text";
+    }
+  });
+});
+</script>
+</body>
+</html>
