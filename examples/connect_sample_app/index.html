@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo Store — help chat</title>
+<style>
+  :root {
+    --ground: #f3f5f2; --paper: #ffffff; --ink: #1b2420; --muted: #65706b; --line: #dde3df;
+    --brand: #1f6b4f; --brand-soft: #e3f0ea; --bot: #f1f3f6; --warn: #8a5a00; --warn-soft: #fbf1dc;
+    --font: "Segoe UI", system-ui, -apple-system, sans-serif; --mono: ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font: 15px/1.5 var(--font); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 20px;
+          grid-template-columns: minmax(320px, 440px) 1fr; }
+  @media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } }
+  .store { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; display: flex;
+           flex-direction: column; height: 640px; overflow: hidden; }
+  .store header { background: var(--brand); color: #fff; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .store header b { font-size: 17px; }
+  .who { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+  select, input, button { font: inherit; }
+  .who select { flex: 1; padding: 4px 6px; border-radius: 6px; border: 0; }
+  .msgs { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 82%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; }
+  .msg.me { align-self: flex-end; background: var(--brand-soft); }
+  .msg.bot { align-self: flex-start; background: var(--bot); }
+  .msg.note { align-self: center; background: var(--warn-soft); color: var(--warn); font-size: 13px; }
+  .typing { color: var(--muted); font-size: 13px; padding: 0 14px 6px; min-height: 22px; }
+  form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
+  form input { flex: 1; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; }
+  button { padding: 8px 14px; border-radius: 8px; border: 0; background: var(--brand); color: #fff; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--brand); border: 1px solid var(--line); }
+  button:disabled { opacity: .5; cursor: default; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .dev { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+         display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .dev h2 { margin: 0; font-size: 15px; }
+  .status { font-size: 13px; color: var(--muted); }
+  .status .ok { color: var(--brand); font-weight: 600; } .status .bad { color: #b3261e; font-weight: 600; }
+  pre { margin: 0; font: 12px/1.45 var(--mono); background: var(--ground); border: 1px solid var(--line);
+        border-radius: 8px; padding: 10px; overflow: auto; max-height: 230px; white-space: pre-wrap; word-break: break-word; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="store" aria-label="Demo Store chat">
+    <header>
+      <b>Demo Store · Help</b>
+      <div class="who">
+        <label for="who">Logged in as</label>
+        <select id="who"></select>
+      </div>
+    </header>
+    <div class="msgs" id="msgs" aria-live="polite"></div>
+    <div class="typing" id="typing"></div>
+    <form id="send">
+      <input id="text" autocomplete="off" placeholder="Ask about an order, returns, delivery…">
+      <button id="go">Send</button>
+    </form>
+  </section>
+
+  <section class="dev" aria-label="What happens behind the chat">
+    <div class="row" style="justify-content:space-between">
+      <h2>Behind the chat: what the store's server does</h2>
+      <button class="ghost" id="newchat" type="button">New conversation</button>
+    </div>
+    <div class="status" id="status">Checking the key…</div>
+    <div><b style="font-size:13px">Last request to IndicusAI</b><pre id="req">—</pre></div>
+    <div><b style="font-size:13px">Events received</b><pre id="events">—</pre></div>
+    <div><b style="font-size:13px">Webhooks received (POST /webhook)</b><pre id="hooks">None yet. Webhooks need this app on a public https address.</pre></div>
+  </section>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let chatId = "demo-" + Math.random().toString(36).slice(2, 12);
+let busy = false;
+
+function add(kind, text) {
+  const d = document.createElement("div");
+  d.className = "msg " + kind;
+  d.textContent = text;
+  $("msgs").appendChild(d);
+  $("msgs").scrollTop = $("msgs").scrollHeight;
+}
+
+async function setup() {
+  const s = await (await fetch("/api/setup")).json();
+  $("who").innerHTML = '<option value="">Visitor (not logged in)</option>' +
+    s.customers.map(c => `<option value="${c.id}">${c.name} · ${c.phone}</option>`).join("");
+  if (s.customers.length) $("who").value = s.customers[0].id;
+  $("status").innerHTML = (s.key_ok
+      ? `<span class="ok">Connected</span> to ${s.api} as integration “${s.integration}”.`
+      : `<span class="bad">Key not accepted</span>: ${s.integration || "set CONNECT_KEY"}.`) +
+    ` Customer secret ${s.customer_secret_set ? "set" : "missing"}; webhook secret ${s.webhook_secret_set ? "set" : "not set"}.`;
+  add("note", "This is a sample store app. Its server holds the Connect key and signs a token for whoever is logged in.");
+}
+
+async function send(text) {
+  busy = true; $("go").disabled = true;
+  add("me", text);
+  $("typing").textContent = "Demo Store is typing…";
+  const events = [];
+  const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, chat_id: chatId, customer_id: $("who").value }) });
+  const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+      const ev = (chunk.match(/^event: (.*)$/m) || [])[1];
+      const data = JSON.parse((chunk.match(/^data: (.*)$/m) || [])[1] || "{}");
+      if (ev === "request") { $("req").textContent = JSON.stringify(data, null, 2); continue; }
+      events.push(ev);
+      $("events").textContent = events.join(" → ");
+      if (ev === "message") add("bot", data.message.text);
+      if (ev === "handed_over") add("note", "Passed to a person · reference " + (data.handover?.reference || ""));
+      if (ev === "error") add("note", "Error " + data.status + ": " + data.body);
+    }
+  }
+  $("typing").textContent = ""; busy = false; $("go").disabled = false; $("text").focus();
+}
+
+$("send").addEventListener("submit", (e) => {
+  e.preventDefault(); const t = $("text").value.trim(); if (!t || busy) return;
+  $("text").value = ""; send(t);
+});
+$("newchat").addEventListener("click", () => {
+  chatId = "demo-" + Math.random().toString(36).slice(2, 12); $("msgs").innerHTML = "";
+  add("note", "New conversation " + chatId);
+});
+$("who").addEventListener("change", () => $("newchat").click());
+setInterval(async () => {
+  const h = await (await fetch("/api/webhooks")).json();
+  if (h.length) $("hooks").textContent = h.map(w => `${w.at} ${w.event} ${w.valid ? "✓ signature ok" : "✗ signature bad"}`).join("\n");
+}, 3000);
+setup();
+</script>
+</body>
+</html>
