@@ -26,6 +26,8 @@
   .msg { max-width: 82%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; }
   .msg.me { align-self: flex-end; background: var(--brand-soft); }
   .msg.bot { align-self: flex-start; background: var(--bot); }
+  .msg.agent { align-self: flex-start; background: #fff4e5; border: 1px solid #f3d9a8; }
+  .msg.agent::before { content: "Team · "; font-weight: 600; color: var(--warn); }
   .msg.note { align-self: center; background: var(--warn-soft); color: var(--warn); font-size: 13px; }
   .typing { color: var(--muted); font-size: 13px; padding: 0 14px 6px; min-height: 22px; }
   form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
@@ -118,11 +120,30 @@ async function send(text) {
       events.push(ev);
       $("events").textContent = events.join(" → ");
       if (ev === "message") add("bot", data.message.text);
-      if (ev === "handed_over") add("note", "Passed to a person · reference " + (data.handover?.reference || ""));
+      if (ev === "handed_over") { add("note", "Passed to a person · reference " + (data.handover?.reference || "")); listen(); }
+      if (ev === "with_agent") { add("note", "A person from the team has this chat — their reply will appear here."); listen(); }
       if (ev === "error") add("note", "Error " + data.status + ": " + data.body);
     }
   }
   $("typing").textContent = ""; busy = false; $("go").disabled = false; $("text").focus();
+}
+
+// After a hand-over: a person's replies arrive on IndicusAI's events stream.
+let stream = null;
+function listen() {
+  if (stream) return;
+  const after = new Date().toISOString();
+  stream = new EventSource(`/api/events?chat_id=${encodeURIComponent(chatId)}&customer_id=${encodeURIComponent($("who").value)}&after=${encodeURIComponent(after)}`);
+  stream.addEventListener("message", (e) => {
+    const d = JSON.parse(e.data);
+    if (d.message?.role === "agent") add("agent", d.message.text);
+    $("events").textContent += " → agent message";
+  });
+  stream.addEventListener("mode", (e) => {
+    const d = JSON.parse(e.data);
+    if (d.mode === "bot") { add("note", "Back with the store's assistant."); stream.close(); stream = null; }
+  });
+  stream.onerror = () => { stream?.close(); stream = null; setTimeout(listen, 3000); };
 }
 
 $("send").addEventListener("submit", (e) => {
@@ -130,6 +151,7 @@ $("send").addEventListener("submit", (e) => {
   $("text").value = ""; send(t);
 });
 $("newchat").addEventListener("click", () => {
+  if (stream) { stream.close(); stream = null; }
   chatId = "demo-" + Math.random().toString(36).slice(2, 12); $("msgs").innerHTML = "";
   add("note", "New conversation " + chatId);
 });

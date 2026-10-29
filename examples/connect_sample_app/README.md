@@ -53,8 +53,10 @@ signature checked out.
 - As a visitor: the same — it asks for the last 4 digits of the order's mobile
   or the delivery pincode.
 - "What is your return policy?" — from the workspace's FAQ.
-- "I want to talk to a person" — a reference, and the customer appears on
-  **Customer help → Waiting for a person**.
+- "I want to talk to a person" — a reference, and the conversation appears in
+  **Customer help → Inbox**. Take it there and reply: the reply appears in this
+  chat as a "Team" message (through IndicusAI's live events stream — no
+  webhook needed). Give it back to the bot and the assistant answers again.
 
 It never stores the key in the page: everything secret stays in `app.py`'s
 process, which is the point a client's developers should copy.
