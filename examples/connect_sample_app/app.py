@@ -119,6 +119,31 @@ async def chat(request: Request) -> StreamingResponse:
     return StreamingResponse(relay(), media_type="text/event-stream")
 
 
+@app.get("/api/events")
+async def events(chat_id: str, customer_id: str = "", after: str = "") -> StreamingResponse:
+    """After a hand-over: a person's replies, live, from IndicusAI's events
+    stream — what a client app without a webhook does."""
+    customer = _customer(customer_id)
+    params = {"after": after} if after else {}
+
+    async def relay():
+        try:
+            async with httpx.AsyncClient(timeout=None) as c, c.stream(
+                "GET", f"{API}/connect/conversations/{chat_id}/events", params=params,
+                headers={**_headers(customer), "Accept": "text/event-stream"},
+            ) as r:
+                event = "message"
+                async for line in r.aiter_lines():
+                    if line.startswith("event:"):
+                        event = line.split(":", 1)[1].strip()
+                    elif line.startswith("data:"):
+                        yield _sse(event, json.loads(line.split(":", 1)[1].strip() or "{}"))
+        except httpx.HTTPError as exc:
+            yield _sse("error", {"status": 0, "body": f"Events stream ended: {exc}"})
+
+    return StreamingResponse(relay(), media_type="text/event-stream")
+
+
 @app.get("/api/history")
 async def history(chat_id: str, customer_id: str = "") -> JSONResponse:
     customer = _customer(customer_id)
