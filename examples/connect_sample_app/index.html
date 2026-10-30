@@ -44,6 +44,13 @@
   pre { margin: 0; font: 12px/1.45 var(--mono); background: var(--ground); border: 1px solid var(--line);
         border-radius: 8px; padding: 10px; overflow: auto; max-height: 230px; white-space: pre-wrap; word-break: break-word; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .card { align-self: flex-start; max-width: 82%; background: var(--paper); border: 1px solid var(--line);
+          border-radius: 10px; padding: 8px 12px; font-size: 13px; display: grid; gap: 2px; }
+  .card b { font-size: 14px; } .card .st { color: var(--brand); font-weight: 600; }
+  .card a { color: var(--brand); }
+  .quick { align-self: flex-start; display: flex; gap: 6px; flex-wrap: wrap; }
+  .quick button { background: var(--paper); color: var(--brand); border: 1px solid var(--brand); padding: 4px 12px;
+                  border-radius: 999px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -88,6 +95,35 @@ function add(kind, text) {
   $("msgs").scrollTop = $("msgs").scrollHeight;
 }
 
+// Order cards and buttons that come with a bot message (quick_replies, cards).
+function addRich(message) {
+  for (const c of message.cards || []) {
+    const d = document.createElement("div");
+    d.className = "card";
+    const line = (label, v) => v ? `<div>${label}: ${esc(v)}</div>` : "";
+    d.innerHTML = `<b>Order ${esc(c.order)}</b><div class="st">${esc(c.status || "")}</div>` +
+      line("Expected", c.expected) + line("Delivered", c.delivered_on) + line("Items", c.items) +
+      line("Latest", c.latest_update) + line("Courier", [c.courier, c.awb].filter(Boolean).join(" · ")) +
+      (/^https:\/\//.test(c.tracking_url || "") ? `<a href="${esc(c.tracking_url)}" target="_blank" rel="noopener">Track</a>` : "");
+    $("msgs").appendChild(d);
+  }
+  const q = message.quick_replies || [];
+  if (q.length) {
+    const d = document.createElement("div");
+    d.className = "quick";
+    for (const t of q) {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = t;
+      // A tap is the customer's next message, exactly as if typed.
+      b.addEventListener("click", () => { if (!busy) { d.remove(); send(t); } });
+      d.appendChild(b);
+    }
+    $("msgs").appendChild(d);
+  }
+  $("msgs").scrollTop = $("msgs").scrollHeight;
+}
+function esc(v) { return String(v).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]); }
+
 async function setup() {
   const s = await (await fetch("/api/setup")).json();
   $("who").innerHTML = '<option value="">Visitor (not logged in)</option>' +
@@ -119,7 +155,7 @@ async function send(text) {
       if (ev === "request") { $("req").textContent = JSON.stringify(data, null, 2); continue; }
       events.push(ev);
       $("events").textContent = events.join(" → ");
-      if (ev === "message") add("bot", data.message.text);
+      if (ev === "message") { add("bot", data.message.text); addRich(data.message); }
       if (ev === "handed_over") { add("note", "Passed to a person · reference " + (data.handover?.reference || "")); listen(); }
       if (ev === "with_agent") { add("note", "A person from the team has this chat — their reply will appear here."); listen(); }
       if (ev === "error") add("note", "Error " + data.status + ": " + data.body);

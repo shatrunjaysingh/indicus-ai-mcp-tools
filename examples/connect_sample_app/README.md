@@ -52,6 +52,10 @@ signature checked out.
   without asking anything.
 - As a visitor: the same — it asks for the last 4 digits of the order's mobile
   or the delivery pincode.
+- Logged in with two orders: "Where are my orders?" — order cards, and a
+  button per order; tap one to ask about it.
+- With order changes switched on (**Customer help → Order changes**): "Cancel
+  my order" — the bot asks to confirm with **Yes** / **No** buttons.
 - "What is your return policy?" — from the workspace's FAQ.
 - "I want to talk to a person" — a reference, and the conversation appears in
   **Customer help → Inbox**. Take it there and reply: the reply appears in this
