@@ -113,3 +113,30 @@ is gitignored — the fixtures are derived, not source.
 
 Only the utility demo needs them, and only to run a visit end to end; seeding
 works without.
+
+
+## Sample client back offices: /shop, /power, /service
+
+Three pretend businesses for the chat bot's **data connectors**: an online store
+(Kettle & Co), an electricity utility (Brightline Power), and an appliance and
+battery service company (FixRight Service). A connector is built and tested
+against these exactly as against a real client's API, so no client is needed,
+and no customer data is ever uploaded to IndicusAI.
+
+| Business | Reads | Changes |
+|---|---|---|
+| `/shop` | customer by mobile, orders, one order | cancel, return, change address (refused in the wrong state) |
+| `/power` | accounts by mobile, bills, payment link, outage at the account's address, complaints | raise a complaint |
+| `/service` | products with warranty, warranty by serial, service requests | book a visit, move a visit |
+
+- **Auth:** `X-Api-Key: sample-client-key` (set `SAMPLE_CLIENT_API_KEY`). It is declared
+  as an API-key security scheme, so an OpenAPI import treats it as a stored credential.
+- **Specs:** `/shop/openapi.json`, `/power/openapi.json`, `/service/openapi.json`.
+- **Test people** (the same in all three): `+919000000999` Asha Rao (Bengaluru),
+  `+919000000111` Ravi Sen (Kolkata, which has a power cut today), `+919000000222` Meera Iyer
+  (Chennai), `+919000000333` Arjun Mehta (Mumbai).
+- **Data** is synthetic, in memory, and dated relative to today. Changes last until a restart.
+
+```bash
+curl -s -H "X-Api-Key: sample-client-key" "localhost:8304/power/accounts?phone=9000000999"
+```
