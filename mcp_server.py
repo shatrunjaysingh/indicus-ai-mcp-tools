@@ -45,6 +45,7 @@ from services import (
     sample_power_api,
     sample_service_api,
     sample_shop_api,
+    sample_vendors,
     soc_api,
     utility_api,
 )
@@ -197,6 +198,10 @@ app = FastAPI(title="Indicus demo tools", description=__doc__, lifespan=lifespan
 app.mount("/mcp", _mcp_app)
 for _name, _app in SERVICES.items():
     app.mount(f"/{_name}", _app)
+# Imitations of vendor systems (Shopify, Salesforce, Zoho, Unicommerce, SAP)
+# for the platform's ready-made connectors: REST only, not MCP tools.
+for _name, _app in sample_vendors.APPS.items():
+    app.mount(f"/vendors/{_name}", _app)
 
 
 @app.get("/health")
@@ -204,7 +209,7 @@ def health() -> dict:
     """Both surfaces, and what is registered on each."""
     return {
         "status": "ok",
-        "rest": [f"/{n}" for n in SERVICES],
+        "rest": [f"/{n}" for n in SERVICES] + [f"/vendors/{n}" for n in sample_vendors.APPS],
         "mcp": {"endpoint": "/mcp", "transport": "streamable-http"},
         "tools": REGISTERED,
         "tool_count": sum(len(v) for v in REGISTERED.values()),
