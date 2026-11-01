@@ -62,6 +62,7 @@ SERVICES: dict[str, FastAPI] = {
     "shop": sample_shop_api.app,
     "power": sample_power_api.app,
     "service": sample_service_api.app,
+    "miso": sample_shop_api.miso_app,
 }
 
 mcp: MCPServer = MCPServer(
