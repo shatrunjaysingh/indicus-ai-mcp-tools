@@ -37,7 +37,17 @@ from fastapi.routing import APIRoute
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
-from services import battery_api, discom_api, iam_api, payer_api, soc_api, utility_api
+from services import (
+    battery_api,
+    discom_api,
+    iam_api,
+    payer_api,
+    sample_power_api,
+    sample_service_api,
+    sample_shop_api,
+    soc_api,
+    utility_api,
+)
 
 # mount path -> the FastAPI app serving it.
 SERVICES: dict[str, FastAPI] = {
@@ -47,6 +57,11 @@ SERVICES: dict[str, FastAPI] = {
     "iam": iam_api.app,
     "discom": discom_api.app,
     "battery": battery_api.app,
+    # Sample client back offices (services/sample_clients.py): what IndicusAI's
+    # chat bot reaches through data connectors, as it would a real client's.
+    "shop": sample_shop_api.app,
+    "power": sample_power_api.app,
+    "service": sample_service_api.app,
 }
 
 mcp: MCPServer = MCPServer(
@@ -57,7 +72,9 @@ mcp: MCPServer = MCPServer(
         "visits, accounts, billing, meter readings and grid events. Payer and "
         "IAM tools cover claims and access certification. Battery tools cover a "
         "battery maker's warranty claims, field readings, factory retests and "
-        "production records."
+        "production records. Shop, power and service tools are sample client "
+        "back offices (an online store, an electricity utility, a service "
+        "company) for the chat bot's data connectors."
     ),
 )
 
