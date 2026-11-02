@@ -10,17 +10,31 @@ Two stores share the code, each its own app with its own orders:
     /miso   Miso — the 300 orders the Customer Help Line demo used to upload
             (IDS-240001 … IDS-240300, all on +919000… test numbers), kept in
             sample_miso_orders.json with dates as days from today.
+
+For testing, each store's data can be changed through its own API (and so
+from its Swagger page, /shop/docs or /miso/docs): PATCH an order (any field,
+including the phone and name, which moves it to that customer), POST a new
+one, POST /reset to go back to the original. Changes — and the cancels,
+returns and address changes the bot makes — are saved under SAMPLE_STATE_DIR
+(state/<store>.json) so a restart keeps them until a reset.
 """
 
 from __future__ import annotations
 
+import copy
 import json
+import logging
+import os
+from collections.abc import Callable
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from sample_clients import PEOPLE, clean_phone, day, now_iso, require_key
+
+logger = logging.getLogger(__name__)
+STATE_DIR = Path(os.environ.get("SAMPLE_STATE_DIR", Path(__file__).resolve().parent.parent / "state"))
 
 CANCELLABLE = {"Order placed", "Packed"}
 ADDRESS_CHANGEABLE = {"Order placed", "Packed"}
@@ -35,10 +49,85 @@ class Address(BaseModel):
     address: str = Field(min_length=10, max_length=500)
 
 
-def store_app(title: str, customers: dict[str, dict], orders: dict[str, dict]) -> FastAPI:
-    """One store's order API over its own customers and orders (changed in place)."""
+class OrderEdit(BaseModel):
+    """Only the fields given are changed. A new phone (and name) moves the
+    order to that customer, made if they are new."""
+
+    phone: str | None = Field(default=None, examples=["+918826889512"])
+    customer_name: str | None = Field(default=None, examples=["Shiwesh Shiwam"])
+    pincode: str | None = Field(default=None, examples=["110001"])
+    items: str | None = None
+    status: str | None = Field(
+        default=None,
+        examples=["Delayed"],
+        description="Order placed, Packed, Shipped, Out for delivery, Delayed, Delivered, Cancelled, …",
+    )
+    status_detail: str | None = Field(default=None, examples=["Held at the hub due to heavy rain"])
+    ordered_on: str | None = Field(default=None, examples=["2026-10-30"])
+    expected_on: str | None = Field(default=None, examples=["2026-11-04"])
+    delivered_on: str | None = None
+    courier: str | None = None
+    awb: str | None = None
+    tracking_url: str | None = None
+    delivery_address: str | None = None
+
+
+class NewOrder(OrderEdit):
+    order_id: str = Field(min_length=3, max_length=40, examples=["IDS-249001"])
+    phone: str = Field(examples=["+918826889512"])
+    items: str = Field(examples=["Steel water bottle"])
+    status: str = Field(examples=["Packed"])
+
+
+def store_app(
+    title: str,
+    customers: dict[str, dict],
+    orders: dict[str, dict],
+    *,
+    slug: str = "",
+    id_prefix: str = "C",
+    original: Callable[[], tuple[dict[str, dict], dict[str, dict]]] | None = None,
+) -> FastAPI:
+    """One store's order API over its own customers and orders (changed in
+    place, and saved when the store has a slug)."""
     app = FastAPI(title=title, description=__doc__, version="1.0.0", dependencies=[Depends(require_key)])
+    state = STATE_DIR / f"{slug}.json" if slug else None
+    if state is not None and state.exists():
+        try:
+            saved = json.loads(state.read_text())
+            customers.clear(), customers.update(saved["customers"])
+            orders.clear(), orders.update(saved["orders"])
+        except (ValueError, KeyError) as exc:
+            logger.warning("%s: saved test data unreadable, using the original: %s", slug, exc)
     by_phone = {c["phone"]: cid for cid, c in customers.items()}
+
+    def _save() -> None:
+        if state is None:
+            return
+        try:
+            state.parent.mkdir(parents=True, exist_ok=True)
+            tmp = state.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"customers": customers, "orders": orders}, ensure_ascii=False))
+            tmp.replace(state)
+        except OSError as exc:  # read-only disk: the change still holds until a restart
+            logger.warning("%s: could not save test data: %s", slug, exc)
+
+    def _customer(phone: str, name: str | None, pincode: str | None) -> str:
+        """The customer with this mobile, made if new; their name updated if given."""
+        phone = clean_phone(phone)
+        if len(phone) != 13:
+            raise HTTPException(422, "Give a 10-digit Indian mobile, e.g. +918826889512.")
+        cid = by_phone.get(phone)
+        if cid is None:
+            cid = f"{id_prefix}{phone[-6:]}"
+            while cid in customers and customers[cid]["phone"] != phone:
+                cid += "X"
+            customers[cid] = {"customer_id": cid, "name": name or "Test customer", "phone": phone,
+                              "pincode": pincode or ""}
+            by_phone[phone] = cid
+        elif name:
+            customers[cid]["name"] = name
+        return cid
 
     def _get(order_id: str) -> dict:
         o = orders.get(order_id.strip().upper())
@@ -74,6 +163,7 @@ def store_app(title: str, customers: dict[str, dict], orders: dict[str, dict]) -
         if o["status"] not in CANCELLABLE:
             raise HTTPException(409, f"Order {o['order_id']} is {o['status']} and can no longer be cancelled.")
         o.update(status="Cancelled", cancelled_at=now_iso(), cancel_reason=body.reason)
+        _save()
         return {"message": f"Order {o['order_id']} is cancelled. The refund reaches you in 5 to 7 working days.", "order": o}
 
     @app.post("/orders/{order_id}/return", operation_id="startReturn", summary="Start a return for a delivered order")
@@ -82,6 +172,7 @@ def store_app(title: str, customers: dict[str, dict], orders: dict[str, dict]) -
         if o["status"] not in RETURNABLE:
             raise HTTPException(409, f"Order {o['order_id']} is {o['status']}; only delivered orders can be returned.")
         o.update(status="Return requested", return_pickup_on=day(2), return_reason=body.reason)
+        _save()
         return {"message": f"Return started for {o['order_id']}. Pickup on {o['return_pickup_on']}.", "order": o}
 
     @app.post("/orders/{order_id}/address", operation_id="changeAddress", summary="Change the delivery address before it ships")
@@ -90,7 +181,67 @@ def store_app(title: str, customers: dict[str, dict], orders: dict[str, dict]) -
         if o["status"] not in ADDRESS_CHANGEABLE:
             raise HTTPException(409, f"Order {o['order_id']} is {o['status']}; the address can no longer change.")
         o["delivery_address"] = body.address.strip()
+        _save()
         return {"message": f"The delivery address for {o['order_id']} is changed.", "order": o}
+
+    # --- test data: change the store's orders from Swagger ------------------------
+
+    def _apply(o: dict, edit: OrderEdit) -> None:
+        given = edit.model_dump(exclude_unset=True)
+        if "phone" in given or "customer_name" in given:
+            cid = _customer(given.get("phone") or o["phone"], given.get("customer_name"), given.get("pincode"))
+            c = customers[cid]
+            o.update(customer_id=cid, phone=c["phone"])
+            if "customer_name" in o or "customer_name" in given:
+                o["customer_name"] = c["name"]
+        for key in ("pincode", "items", "status", "status_detail", "ordered_on", "expected_on",
+                    "delivered_on", "courier", "awb", "tracking_url", "delivery_address"):
+            if key in given:
+                o[key] = given[key]
+
+    @app.patch(
+        "/orders/{order_id}", operation_id="testEditOrder", tags=["Test data"],
+        summary="Test data: change an order (only the fields you give)",
+    )
+    def edit_order(order_id: str, body: OrderEdit) -> dict:
+        o = _get(order_id)
+        _apply(o, body)
+        _save()
+        return o
+
+    @app.post(
+        "/orders", operation_id="testAddOrder", tags=["Test data"], status_code=201,
+        summary="Test data: add an order",
+    )
+    def add_order(body: NewOrder) -> dict:
+        oid = body.order_id.strip().upper()
+        if oid in orders:
+            raise HTTPException(409, f"Order {oid} exists; change it with PATCH instead.")
+        cid = _customer(body.phone, body.customer_name, body.pincode)
+        c = customers[cid]
+        o = {"order_id": oid, "customer_id": cid, "customer_name": c["name"], "phone": c["phone"],
+             "pincode": body.pincode or c["pincode"], "items": body.items, "status": body.status,
+             "status_detail": "", "ordered_on": day(0), "expected_on": None, "delivered_on": None,
+             "courier": "", "awb": "", "tracking_url": "", "delivery_address": f"Pincode {body.pincode or c['pincode']}"}
+        _apply(o, body)
+        orders[oid] = o
+        _save()
+        return o
+
+    @app.post(
+        "/reset", operation_id="testReset", tags=["Test data"],
+        summary="Test data: back to the original orders (every change is undone)",
+    )
+    def reset() -> dict:
+        if original is None:
+            raise HTTPException(409, "This store has no original to go back to.")
+        base_customers, base_orders = original()
+        customers.clear(), customers.update(base_customers)
+        orders.clear(), orders.update(base_orders)
+        by_phone.clear(), by_phone.update({c["phone"]: cid for cid, c in customers.items()})
+        if state is not None and state.exists():
+            state.unlink()
+        return {"message": "Back to the original data.", "orders": len(orders)}
 
     return app
 
@@ -133,9 +284,17 @@ def _order(n: int, row) -> dict:
     }
 
 
-KETTLE_ORDERS = {o["order_id"]: o for o in (_order(n, r) for n, r in enumerate(_ORDERS, start=1))}
+def _kettle() -> tuple[dict[str, dict], dict[str, dict]]:
+    return (
+        copy.deepcopy(KETTLE_CUSTOMERS),
+        {o["order_id"]: o for o in (_order(n, r) for n, r in enumerate(_ORDERS, start=1))},
+    )
 
-app = store_app("Kettle & Co order system (sample client)", KETTLE_CUSTOMERS, KETTLE_ORDERS)
+
+_KC, KETTLE_ORDERS = _kettle()
+app = store_app(
+    "Kettle & Co order system (sample client)", _KC, KETTLE_ORDERS, slug="shop", id_prefix="KC-C", original=_kettle
+)
 
 
 # ---- Miso ----------------------------------------------------------------------
@@ -169,4 +328,6 @@ def _miso() -> tuple[dict[str, dict], dict[str, dict]]:
 
 
 MISO_CUSTOMERS, MISO_ORDERS = _miso()
-miso_app = store_app("Miso order system (sample client)", MISO_CUSTOMERS, MISO_ORDERS)
+miso_app = store_app(
+    "Miso order system (sample client)", MISO_CUSTOMERS, MISO_ORDERS, slug="miso", id_prefix="MS-C", original=_miso
+)

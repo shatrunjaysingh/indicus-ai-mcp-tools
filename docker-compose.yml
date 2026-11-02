@@ -25,6 +25,7 @@ services:
       # serves. Left as localhost it still works on the box, just not for anyone
       # else.
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8304}
+      SAMPLE_STATE_DIR: /app/state
       DEMO_HOST: ${DEMO_HOST:-mcp-tools}
       # The sample client back offices' API key (/shop, /miso, /power, /service): a
       # test value the chat bot's data connectors send as X-Api-Key, exactly
@@ -37,6 +38,9 @@ services:
     volumes:
       # The visit recordings, which cannot be generated on Linux.
       - ./data:/app/data:ro
+      # Test data changed through the sample stores' Swagger pages (PATCH an
+      # order, add one, reset), kept across restarts until a reset.
+      - ./state:/app/state
     networks: [platform]
 
 networks:
