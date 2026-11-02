@@ -136,7 +136,15 @@ and no customer data is ever uploaded to IndicusAI.
 - **Test people** (the same in all three): `+919000000999` Asha Rao (Bengaluru),
   `+919000000111` Ravi Sen (Kolkata, which has a power cut today), `+919000000222` Meera Iyer
   (Chennai), `+919000000333` Arjun Mehta (Mumbai).
-- **Data** is synthetic, in memory, and dated relative to today. Changes last until a restart.
+- **Data** is synthetic, in memory, and dated relative to today. `/power` and `/service`
+  changes last until a restart.
+- **Changing the stores' data for a test** (`/shop`, `/miso`): on the Swagger page
+  (`/miso/docs`, `/shop/docs`), **Authorize** with the key, then under **Test data**:
+  `PATCH /orders/{order_id}` changes any field you give — a new `phone` / `customer_name`
+  moves the order to that customer; `POST /orders` adds one; `POST /reset` undoes every
+  change. Changes (and the bot's cancels, returns and address changes) are saved in
+  `state/<store>.json` and survive a restart until a reset. On the server the port is only
+  on the box: `ssh -N -L 8304:127.0.0.1:8304 <server>` and open `localhost:8304/miso/docs`.
 
 ```bash
 curl -s -H "X-Api-Key: sample-client-key" "localhost:8304/power/accounts?phone=9000000999"

@@ -28,3 +28,6 @@ services/_battery_cache.pickle
 
 # Telephony credentials. Never committed.
 .env
+
+# Sample stores' test data changed through Swagger (services/sample_shop_api.py).
+state/
