@@ -32,7 +32,7 @@ services:
       SAMPLE_PUBLIC_URL: ${SAMPLE_PUBLIC_URL:-}
       DEMO_HOST: ${DEMO_HOST:-mcp-tools}
       # The sample client back offices' API key (/shop, /miso, /power, /service,
-      # /lender, /insurer, /clinic, /crm): a
+      # /lender, /insurer, /clinic, /crm, /hiring): a
       # test value the chat bot's data connectors send as X-Api-Key, exactly
       # as they would a real client's key.
       SAMPLE_CLIENT_API_KEY: ${SAMPLE_CLIENT_API_KEY:-sample-client-key}
