@@ -337,3 +337,68 @@ Existing routes unchanged (`/products?phone=`, `/warranty/{serial}`, `/requests?
 | Method | Path | MCP tool | Params / body | Response (records at) |
 |---|---|---|---|---|
 | GET | `/service/visits` | `service_listScheduledVisits` | query `within_days` (default 1 = today and tomorrow; 0–7) | `{count, visits: [{request_id, mobile, customer_name, preferred_language, product, visit_on, visit_window, technician}]}` → **`visits`**, open requests with a visit in the window |
+
+---
+
+## 8. `/hiring` — Kaam Staffing (applicants and interviews)
+
+For the Candidate Screening & Interview Scheduling agent. Query parameter is **`mobile`**. Stages: New,
+Screened, Callback, Not interested, Interview scheduled, Interview confirmed, Reschedule, Withdrawn,
+Hired, Rejected (snake_case accepted: `not_interested`).
+
+| Method | Path | MCP tool | Params / body | Response (records at) |
+|---|---|---|---|---|
+| GET | `/hiring/candidates` | `hiring_getCandidatesByMobile` | query `mobile` | `{mobile, candidates: [{candidate_id, full_name, mobile, preferred_language, city, job_id, job_title, job_city, stage, score, notes, applied_at}]}` → **`candidates`** |
+| GET | `/hiring/candidates/new` | `hiring_listNewCandidates` | — | `{count, candidates: [...]}` → **`candidates`** (stage New) |
+| PATCH | `/hiring/candidates/{candidate_id}` | `hiring_updateCandidate` | body `{stage?, score?, notes?}` (test data: `full_name?, mobile?, preferred_language?`) | the applicant + `message` |
+| GET | `/hiring/jobs/{job_id}` | `hiring_getJob` | path | `{job_id, title, city, salary, shift, requirements, openings, venue}` |
+| GET | `/hiring/jobs/{job_id}/slots` | `hiring_listInterviewSlots` | query `from` (YYYY-MM-DD) | `{job_id, slots: [{slot_id, start_time, venue}]}` → **`slots`**, next three working days (not Sundays) |
+| POST | `/hiring/interviews` | `hiring_bookInterview` | body `{candidate_id, slot_id}` | `{interview: {interview_id, start_time, venue, …}, message}`; stage → Interview scheduled. 409 if the slot is taken |
+| GET | `/hiring/interviews/upcoming` | `hiring_listUpcomingInterviews` | — | `{count, interviews: [{interview_id, candidate_id, full_name, mobile, preferred_language, job_title, start_time, venue}]}` → **`interviews`** (tomorrow) |
+| POST | `/hiring/candidates` | `hiring_testAddCandidate` | body `{full_name, mobile, job_id?, preferred_language?}` | Test data: a new applicant (stage New) |
+| POST | `/hiring/reset` | `hiring_testReset` | — | Test data: back to the seed |
+
+Jobs: JB-101 Delivery partner (Bengaluru), JB-102 Customer support associate (Mumbai), JB-103 Retail store
+associate (Chennai). Applicants: CN-5001 Asha (JB-101, New), CN-5002 Arjun (JB-102, New, hi-IN), CN-5003 Meera
+(JB-103, New), CN-5004 Pooja (JB-102, interview IV-7001 tomorrow 11:30), CN-5005 Ravi (Screened).
+
+---
+
+## 9. `/lender` — new customers (welcome calls) and verification calls
+
+For the Welcome & Activation Calls and Application Verification Calls agents. Added to Sahyog Finance.
+
+| Method | Path | MCP tool | Params / body | Response (records at) |
+|---|---|---|---|---|
+| GET | `/lender/onboarding` | `lender_getOnboardingByMobile` | query `mobile` | `{mobile, products: [{reference, customer_name, mobile, preferred_language, product, opened_on, activated, next_step, key_facts, activation_link, last_welcome, fraud_alert?}]}` → **`products`** |
+| GET | `/lender/onboarding/new` | `lender_listNewCustomers` | — | `{count, customers: [...]}` → **`customers`**, joined in the last 30 days (the agent narrows to its own window and to not activated) |
+| POST | `/lender/onboarding/{reference}/welcome` | `lender_recordWelcomeCall` | body `{outcome: welcomed\|needs_help\|not_mine\|callback, remark?}` | `{reference, outcome, message}`; `not_mine` sets `fraud_alert` |
+| GET | `/lender/activate/{reference}` | (page, no key) | — | The activation page a customer opens; its button activates |
+| GET | `/lender/verifications` | `lender_getVerificationByMobile` | query `mobile` | `{mobile, cases: [{case_no, applicant_name, mobile, preferred_language, product, loan_amount, current_city, pincode, employer_name, status, remarks, submitted_at}]}` → **`cases`** |
+| GET | `/lender/verifications/pending` | `lender_listPendingVerifications` | — | `{count, cases: [{case_no, applicant_name, mobile, preferred_language, product, submitted_at}]}` → **`cases`** (status Pending) |
+| POST | `/lender/verifications/{case_no}/result` | `lender_recordVerificationResult` | body `{result: verified\|mismatch\|not_applied\|callback, remarks?}` | `{case_no, status, message}`; status Verified / Mismatch / Fraud check / Pending |
+| POST | `/lender/onboarding`, `/lender/verifications` | `lender_testAddNewCustomer`, `lender_testAddVerification` | your name and mobile | Test data |
+
+Seeded: CC-4821 Asha platinum card (2 days, not active), PL-2207 Sunita personal loan (1 day, auto-debit not set),
+CC-5310 Karthik (active), SA-9004 Ravi savings account (20 days). Verifications: VF-7001 Arjun personal loan
+₹3,00,000 (Mumbai 400001, Tata Consultancy Services), VF-7002 Pooja credit card (Jaipur 302001, Jaipur Rugs),
+VF-7003 Meera (already verified).
+
+---
+
+## 10. `/shop` — unfinished carts and pay-online links (Kettle & Co only)
+
+For the Abandoned Cart & Pay-Online Nudges agent. Saved in `state/shop-carts.json`.
+
+| Method | Path | MCP tool | Params / body | Response (records at) |
+|---|---|---|---|---|
+| GET | `/shop/carts/abandoned` | `shop_listAbandonedCarts` | — | `{count, carts: [{cart_id, customer_name, mobile, language, items, total, abandoned_at, ordered, status, checkout_url}]}` → **`carts`**, not ordered, last 7 days |
+| GET | `/shop/carts/{cart_id}` | `shop_getCart` | path | one cart, with `ordered` (true once the customer finished) |
+| POST | `/shop/payment-links` | `shop_createOrderPaymentLink` | body `{order_id, amount?, mobile?}` | `{id, order_id, amount, short_url, expire_by, status}`; 409 unless the order is COD |
+| GET/POST | `/shop/checkout/{cart_id}`, `/shop/pay/{link_id}` | (pages, no key) | — | Finish the order (marks the cart ordered) / pay online (marks the order prepaid) |
+| POST | `/shop/carts` | `shop_testAddCart` | body `{customer_name, mobile, items?, total?, minutes_ago?}` | Test data: a cart left `minutes_ago` minutes ago |
+| POST | `/shop/carts/reset` | `shop_testResetCarts` | — | Test data: back to the seed |
+
+Seeded: CART-9001 Asha (2 hours ago), CART-9002 Arjun (15 minutes ago: too soon to call), CART-9003 Meera
+(already ordered), CART-9004 Sunita (5 hours ago). Times are set when the service starts; add your own with
+`POST /shop/carts` for a test.

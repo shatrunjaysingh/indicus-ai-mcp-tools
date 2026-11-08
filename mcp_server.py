@@ -44,6 +44,7 @@ from services import (
     payer_api,
     sample_clinic_api,
     sample_crm_api,
+    sample_hiring_api,
     sample_insurer_api,
     sample_lender_api,
     sample_power_api,
@@ -74,6 +75,8 @@ SERVICES: dict[str, FastAPI] = {
     "insurer": sample_insurer_api.app,
     "clinic": sample_clinic_api.app,
     "crm": sample_crm_api.app,
+    # A hiring company's applicant tracking (the screening agent).
+    "hiring": sample_hiring_api.app,
 }
 
 mcp: MCPServer = MCPServer(
@@ -87,8 +90,9 @@ mcp: MCPServer = MCPServer(
         "production records. Shop, miso, power and service tools are sample "
         "client back offices (online stores, an electricity utility, a service "
         "company) for the chat bot's data connectors; lender, insurer, clinic "
-        "and crm tools are sample businesses (loans and KYC, policy renewals, "
-        "appointments, leads/tickets/feedback) for the agent catalog."
+        "crm and hiring tools are sample businesses (loans, KYC, new customers "
+        "and verification; policy renewals; appointments; leads/tickets/feedback; "
+        "applicants and interviews) for the agent catalog."
     ),
 )
 

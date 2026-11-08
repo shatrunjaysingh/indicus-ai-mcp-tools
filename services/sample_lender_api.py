@@ -11,8 +11,13 @@ today, so an account 5 days past due today is 6 days past due tomorrow.
 
 Test data (tag "Test data" on /lender/docs): add a loan on your own mobile
 (POST /loans), change any loan (PATCH /loans/{loan_no}, e.g. {"dpd": 20}) or
-customer's KYC (PATCH /customers/{cif}), POST /reset to go back. Saved in
-state/lender.json across restarts.
+customer's KYC (PATCH /customers/{cif}), add a new customer to welcome
+(POST /onboarding) or an application to verify (POST /verifications) on your
+mobile, POST /reset to go back. Saved in state/lender.json across restarts.
+
+New customers (welcome calls) and verification calls: who joined recently,
+the key facts and the step left (with an activation page), recording the
+welcome; applications to verify, their declared details, recording the result.
 """
 
 from __future__ import annotations
@@ -107,7 +112,50 @@ def _seed() -> dict[str, dict]:
         "status": "Open", "raised_at": day(-6) + "T16:05:00+05:30",
     }
     return {"customers": customers, "loans": loans, "payments": payments, "disputes": disputes,
-            "promises": {}, "payment_links": {}, "vkyc_bookings": {}}
+            "promises": {}, "payment_links": {}, "vkyc_bookings": {},
+            "onboarding": _onboarding_seed(), "verifications": _verification_seed()}
+
+
+#: (reference, person, product, opened days ago, activated, still to do, key facts)
+_NEW = [
+    ("CC-4821", 0, "Platinum credit card", -2, False,
+     "Set your card PIN in the Sahyog app to start using it.",
+     "There is no annual fee in the first year, and your first statement comes on the 15th of next month."),
+    ("PL-2207", 4, "Personal loan", -1, False,
+     "Register auto-debit for your EMIs so you never miss one.",
+     "Your loan of 3 lakh rupees is in your account. Your EMI is 6,240 rupees, due on the 5th of every month."),
+    ("CC-5310", 5, "Rewards credit card", -3, True,
+     "", "Your card is active."),
+    ("SA-9004", 1, "Savings account", -20, False,
+     "Download the Sahyog app and set your login PIN.", "Your account is open; the debit card arrives in a week."),
+]
+
+#: (case, person, product, amount, declared city, pincode, employer, status)
+_CASES = [
+    ("VF-7001", 3, "Personal loan", 300000, "Mumbai", "400001", "Tata Consultancy Services", "Pending"),
+    ("VF-7002", 6, "Credit card", 0, "Jaipur", "302001", "Jaipur Rugs", "Pending"),
+    ("VF-7003", 2, "Two-wheeler loan", 95000, "Chennai", "600001", "Saravana Stores", "Verified"),
+]
+
+
+def _onboarding_seed() -> dict[str, dict]:
+    out = {}
+    for ref, person, product, opened, active, todo, facts in _NEW:
+        p = ALL_PEOPLE[person]
+        out[ref] = {"reference": ref, "customer_name": p["name"], "mobile": p["phone"], "preferred_language": p["language"],
+                    "product": product, "opened_on": day(opened), "activated": active, "next_step": todo,
+                    "key_facts": facts, "welcome_calls": []}
+    return out
+
+
+def _verification_seed() -> dict[str, dict]:
+    out = {}
+    for case, person, product, amount, city, pin, employer, status in _CASES:
+        p = ALL_PEOPLE[person]
+        out[case] = {"case_no": case, "applicant_name": p["name"], "mobile": p["phone"], "preferred_language": p["language"],
+                     "product": product, "loan_amount": amount or None, "current_city": city, "pincode": pin,
+                     "employer_name": employer, "status": status, "remarks": [], "submitted_at": day(-1) + "T18:20:00+05:30"}
+    return out
 
 
 DB = TestData(SLUG, _seed)
@@ -616,6 +664,160 @@ def edit_customer(cif: str, body: CustomerEdit) -> dict:
     c.update({k: v for k, v in given.items() if v is not None})
     DB.save()
     return _kyc(c)
+
+
+# ---- new customers: welcome and activation ------------------------------------------
+
+WELCOME_OUTCOMES = ("welcomed", "needs_help", "not_mine", "callback")
+
+
+def _new_view(n: dict) -> dict:
+    return {**{k: v for k, v in n.items() if k != "welcome_calls"},
+            "activation_link": None if n["activated"] else public_url(SLUG, f"activate/{n['reference']}"),
+            "last_welcome": (n["welcome_calls"] or [None])[-1]}
+
+
+@app.get("/onboarding", dependencies=KEYED, operation_id="getOnboardingByMobile", tags=["New customers"],
+         summary="What a person has just taken: key facts, whether it is active, what is left to do")
+def get_onboarding(mobile: str = Query(description="The customer's mobile, any format")) -> dict:
+    m = clean_phone(mobile)
+    rows = [_new_view(n) for n in DB["onboarding"].values() if n["mobile"] == m]
+    return {"mobile": m, "products": sorted(rows, key=lambda r: r["opened_on"], reverse=True)}
+
+
+@app.get("/onboarding/new", dependencies=KEYED, operation_id="listNewCustomers", tags=["New customers"],
+         summary="Customers who joined in the last 30 days, for a welcome calling campaign")
+def new_customers() -> dict:
+    since = day(-30)
+    rows = [_new_view(n) for n in DB["onboarding"].values() if n["opened_on"] >= since]
+    return {"count": len(rows), "customers": sorted(rows, key=lambda r: r["opened_on"], reverse=True)}
+
+
+class WelcomeIn(BaseModel):
+    outcome: str = Field(description=", ".join(WELCOME_OUTCOMES))
+    remark: str = Field(default="", max_length=2000)
+
+
+@app.post("/onboarding/{reference}/welcome", dependencies=KEYED, operation_id="recordWelcomeCall", tags=["New customers"],
+          summary="Record a welcome call's outcome (not_mine flags possible fraud)")
+def record_welcome(reference: str, body: WelcomeIn) -> dict:
+    n = DB["onboarding"].get(reference.strip().upper())
+    if n is None:
+        raise HTTPException(404, f"No new customer {reference}.")
+    outcome = body.outcome.strip().lower()
+    if outcome not in WELCOME_OUTCOMES:
+        raise HTTPException(422, f"outcome is one of: {', '.join(WELCOME_OUTCOMES)}.")
+    n["welcome_calls"].append({"at": now_iso(), "outcome": outcome, "remark": body.remark})
+    if outcome == "not_mine":
+        n["fraud_alert"] = True
+    DB.save()
+    alert = " Fraud team alerted." if outcome == "not_mine" else ""
+    return {"reference": n["reference"], "outcome": outcome, "message": f"Noted: {outcome.replace('_', ' ')}.{alert}"}
+
+
+class NewCustomerIn(BaseModel):
+    customer_name: str = Field(min_length=2, max_length=120, examples=["Shiwesh Shiwam"])
+    mobile: str = Field(examples=["+918826889512"])
+    product: str = Field(default="Platinum credit card")
+    preferred_language: str = Field(default="en-IN", examples=["hi-IN"])
+    next_step: str = Field(default="Set your card PIN in the Sahyog app to start using it.")
+    key_facts: str = Field(default="There is no annual fee in the first year.")
+
+
+@app.post("/onboarding", dependencies=KEYED, operation_id="testAddNewCustomer", tags=["Test data"], status_code=201,
+          summary="Test data: add a new customer (your mobile) to welcome")
+def add_new_customer(body: NewCustomerIn) -> dict:
+    ref = DB.next_id("onboarding", "CC-", 6001)
+    DB["onboarding"][ref] = {"reference": ref, "customer_name": body.customer_name.strip(), "mobile": valid_mobile(body.mobile),
+                             "preferred_language": body.preferred_language, "product": body.product, "opened_on": day(0),
+                             "activated": False, "next_step": body.next_step, "key_facts": body.key_facts, "welcome_calls": []}
+    DB.save()
+    return _new_view(DB["onboarding"][ref])
+
+
+@app.get("/activate/{reference}", response_class=HTMLResponse, include_in_schema=False)
+def activate_page(reference: str) -> str:
+    n = DB["onboarding"].get(reference)
+    if n is None:
+        return page("Link not found", ["This activation link does not exist or was reset."])
+    if n["activated"]:
+        return page("All set", [f"Your {n['product']} is active. Thank you."])
+    return page(f"Activate your {n['product']}", [n["next_step"] or "One step left.", f"Reference {n['reference']}"],
+                button="Activate now")
+
+
+@app.post("/activate/{reference}", response_class=HTMLResponse, include_in_schema=False)
+def activate_now(reference: str) -> str:
+    n = DB["onboarding"].get(reference)
+    if n is None:
+        return page("Link not found", ["This activation link does not exist or was reset."])
+    n["activated"] = True
+    DB.save()
+    return page("Activated", [f"Your {n['product']} is active. Welcome to {BUSINESS}."])
+
+
+# ---- verification calls ---------------------------------------------------------------
+
+RESULTS = ("verified", "mismatch", "not_applied", "callback")
+
+
+@app.get("/verifications", dependencies=KEYED, operation_id="getVerificationByMobile", tags=["Verification"],
+         summary="A person's applications awaiting (or done with) a verification call")
+def get_verifications(mobile: str = Query(description="The applicant's mobile, any format")) -> dict:
+    m = clean_phone(mobile)
+    rows = [v for v in DB["verifications"].values() if v["mobile"] == m]
+    return {"mobile": m, "cases": sorted(rows, key=lambda r: r["submitted_at"], reverse=True)}
+
+
+@app.get("/verifications/pending", dependencies=KEYED, operation_id="listPendingVerifications", tags=["Verification"],
+         summary="Applications waiting for a verification call, for a calling campaign")
+def pending_verifications() -> dict:
+    rows = [{k: v[k] for k in ("case_no", "applicant_name", "mobile", "preferred_language", "product", "submitted_at")}
+            for v in DB["verifications"].values() if v["status"] == "Pending"]
+    return {"count": len(rows), "cases": rows}
+
+
+class ResultIn(BaseModel):
+    result: str = Field(description=", ".join(RESULTS))
+    remarks: str = Field(default="", max_length=2000, description="What differed (item names), or what the applicant said")
+
+
+@app.post("/verifications/{case_no}/result", dependencies=KEYED, operation_id="recordVerificationResult", tags=["Verification"],
+          summary="Record a verification call's result (not_applied flags possible fraud)")
+def record_result(case_no: str, body: ResultIn) -> dict:
+    v = DB["verifications"].get(case_no.strip().upper())
+    if v is None:
+        raise HTTPException(404, f"No application {case_no}.")
+    result = body.result.strip().lower()
+    if result not in RESULTS:
+        raise HTTPException(422, f"result is one of: {', '.join(RESULTS)}.")
+    v["status"] = {"verified": "Verified", "mismatch": "Mismatch", "not_applied": "Fraud check", "callback": "Pending"}[result]
+    v["remarks"].append({"at": now_iso(), "result": result, "remarks": body.remarks})
+    DB.save()
+    return {"case_no": v["case_no"], "status": v["status"], "message": f"Recorded: {result.replace('_', ' ')}."}
+
+
+class CaseIn(BaseModel):
+    applicant_name: str = Field(min_length=2, max_length=120, examples=["Shiwesh Shiwam"])
+    mobile: str = Field(examples=["+918826889512"])
+    product: str = Field(default="Personal loan")
+    loan_amount: float | None = Field(default=200000)
+    current_city: str = Field(default="Bengaluru")
+    pincode: str = Field(default="560001")
+    employer_name: str = Field(default="Infosys")
+    preferred_language: str = Field(default="en-IN", examples=["hi-IN"])
+
+
+@app.post("/verifications", dependencies=KEYED, operation_id="testAddVerification", tags=["Test data"], status_code=201,
+          summary="Test data: add an application to verify (your mobile)")
+def add_verification(body: CaseIn) -> dict:
+    case = DB.next_id("verifications", "VF-", 7001)
+    DB["verifications"][case] = {"case_no": case, "applicant_name": body.applicant_name.strip(), "mobile": valid_mobile(body.mobile),
+                                 "preferred_language": body.preferred_language, "product": body.product,
+                                 "loan_amount": body.loan_amount, "current_city": body.current_city, "pincode": body.pincode,
+                                 "employer_name": body.employer_name, "status": "Pending", "remarks": [], "submitted_at": now_iso()}
+    DB.save()
+    return DB["verifications"][case]
 
 
 @app.post("/reset", dependencies=KEYED, operation_id="testReset", tags=["Test data"],

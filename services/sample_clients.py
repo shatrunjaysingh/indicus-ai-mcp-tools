@@ -13,6 +13,7 @@ nothing a customer owns is ever uploaded to IndicusAI.
     /insurer   Suraksha Insurance, policy renewals      (sample_insurer_api.py)
     /clinic    CarePoint Clinics, appointments          (sample_clinic_api.py)
     /crm       LeadDesk CRM, leads, tickets, feedback   (sample_crm_api.py)
+    /hiring    Kaam Staffing, applicants and interviews (sample_hiring_api.py)
 
 The full route and field list, for writing mapping presets, is
 docs/SAMPLE-CATALOG-SYSTEMS.md.
@@ -24,7 +25,7 @@ secret); blank turns the check off for local poking with curl.
 The data is synthetic and dated relative to today, so a "due tomorrow" bill
 stays due tomorrow. /power and /service keep changes in memory until a
 restart. The stores and the catalog businesses (/lender, /insurer, /clinic,
-/crm) are test data a tester changes from Swagger — add a record on their own
+/crm, /hiring) are test data a tester changes from Swagger — add a record on their own
 mobile, edit any record, POST /reset — saved under SAMPLE_STATE_DIR
 (state/<name>.json, see TestData) so a restart keeps them until a reset.
 

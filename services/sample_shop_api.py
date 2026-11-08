@@ -39,6 +39,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from sample_clients import ALL_PEOPLE, clean_phone, day, now_iso, require_key
+from sample_shop_carts import attach as attach_carts
 
 logger = logging.getLogger(__name__)
 STATE_DIR = Path(os.environ.get("SAMPLE_STATE_DIR", Path(__file__).resolve().parent.parent / "state"))
@@ -470,6 +471,8 @@ _KC, KETTLE_ORDERS = _kettle()
 app = store_app(
     "Kettle & Co order system (sample client)", _KC, KETTLE_ORDERS, slug="shop", id_prefix="KC-C", original=_kettle
 )
+# Unfinished carts and pay-online links (the cart-recovery agent), Kettle only.
+attach_carts(app, _KC, KETTLE_ORDERS)
 
 
 # ---- Miso ----------------------------------------------------------------------
