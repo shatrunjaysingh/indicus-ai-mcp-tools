@@ -112,6 +112,30 @@ def list_requests(phone: str = Query(description="The customer's registered mobi
     return {"requests": sorted(mine, key=lambda r: r["opened_at"], reverse=True)}
 
 
+@app.get("/visits", operation_id="listScheduledVisits", summary="Technician visits scheduled soon (for confirmation calls)")
+def list_visits(
+    within_days: int = Query(default=1, ge=0, le=7, description="Today and this many days ahead"),
+) -> dict:
+    """Every open request with a visit from today to `within_days` ahead: who to
+    call to confirm the slot or say the technician is on the way."""
+    langs = {p["phone"]: p.get("language", "en-IN") for p in PEOPLE}
+    last = today().toordinal() + within_days
+    out = []
+    for rid in REQUESTS:
+        r = _request(rid)
+        if not r.get("visit_on") or r.get("status") in ("Closed", "Completed", "Cancelled"):
+            continue
+        if date.fromisoformat(r["visit_on"][:10]).toordinal() > last:
+            continue
+        owner = PRODUCTS[r["serial"]]
+        out.append({
+            "request_id": r["request_id"], "mobile": r["phone"], "customer_name": owner.get("owner"),
+            "preferred_language": langs.get(r["phone"], "en-IN"), "product": r["product"],
+            "visit_on": r["visit_on"], "visit_window": r.get("visit_window"), "technician": r.get("technician"),
+        })
+    return {"count": len(out), "visits": sorted(out, key=lambda v: v["visit_on"])}
+
+
 @app.get("/requests/{request_id}", operation_id="getRequest", summary="One service request")
 def get_request(request_id: str) -> dict:
     return _request(request_id)

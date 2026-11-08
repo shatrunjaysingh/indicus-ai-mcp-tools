@@ -17,6 +17,13 @@ including the phone and name, which moves it to that customer), POST a new
 one, POST /reset to go back to the original. Changes — and the cancels,
 returns and address changes the bot makes — are saved under SAMPLE_STATE_DIR
 (state/<store>.json) so a restart keeps them until a reset.
+
+Cash on delivery and delivery problems, for confirmation and NDR agents:
+orders carry payment_mode (COD or Prepaid); COD orders wait in "Pending
+confirmation" (GET /orders/cod-pending, POST /orders/{id}/confirm); a failed
+delivery is "Delivery failed" with ndr_reason and attempt_count (GET
+/orders/ndr, POST /orders/{id}/delivery to reattempt); GET
+/orders/{id}/tracking and /orders/{id}/refund.
 """
 
 from __future__ import annotations
@@ -31,13 +38,20 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from sample_clients import PEOPLE, clean_phone, day, now_iso, require_key
+from sample_clients import ALL_PEOPLE, clean_phone, day, now_iso, require_key
 
 logger = logging.getLogger(__name__)
 STATE_DIR = Path(os.environ.get("SAMPLE_STATE_DIR", Path(__file__).resolve().parent.parent / "state"))
 
-CANCELLABLE = {"Order placed", "Packed"}
-ADDRESS_CHANGEABLE = {"Order placed", "Packed"}
+CANCELLABLE = {"Pending confirmation", "Order placed", "Packed"}
+ADDRESS_CHANGEABLE = {"Pending confirmation", "Order placed", "Packed"}
+NOT_SHIPPED = {"Pending confirmation", "Order placed", "Packed", "Cancelled"}
+
+
+class Reattempt(BaseModel):
+    address: str | None = Field(default=None, min_length=10, max_length=500, description="A corrected address, if that was the problem")
+    reattempt_date: str | None = Field(default=None, description="YYYY-MM-DD, today or later; blank: tomorrow")
+    landmark: str | None = Field(default=None, max_length=200)
 RETURNABLE = {"Delivered"}
 
 
@@ -70,6 +84,11 @@ class OrderEdit(BaseModel):
     awb: str | None = None
     tracking_url: str | None = None
     delivery_address: str | None = None
+    payment_mode: str | None = Field(default=None, examples=["COD"], description="COD or Prepaid")
+    amount: float | None = Field(default=None, examples=[1299])
+    language: str | None = Field(default=None, examples=["hi-IN"], description="The customer's language")
+    ndr_reason: str | None = Field(default=None, examples=["Customer not reachable"])
+    attempt_count: int | None = Field(default=None, ge=0)
 
 
 class NewOrder(OrderEdit):
@@ -112,7 +131,7 @@ def store_app(
         except OSError as exc:  # read-only disk: the change still holds until a restart
             logger.warning("%s: could not save test data: %s", slug, exc)
 
-    def _customer(phone: str, name: str | None, pincode: str | None) -> str:
+    def _customer(phone: str, name: str | None, pincode: str | None, language: str | None = None) -> str:
         """The customer with this mobile, made if new; their name updated if given."""
         phone = clean_phone(phone)
         if len(phone) != 13:
@@ -123,10 +142,12 @@ def store_app(
             while cid in customers and customers[cid]["phone"] != phone:
                 cid += "X"
             customers[cid] = {"customer_id": cid, "name": name or "Test customer", "phone": phone,
-                              "pincode": pincode or ""}
+                              "pincode": pincode or "", "language": language or "en-IN"}
             by_phone[phone] = cid
         elif name:
             customers[cid]["name"] = name
+        if language:
+            customers[cid]["language"] = language
         return cid
 
     def _get(order_id: str) -> dict:
@@ -152,6 +173,37 @@ def store_app(
         cid = customer_id or by_phone.get(clean_phone(phone))
         mine = [o for o in orders.values() if o["customer_id"] == cid]
         return {"orders": sorted(mine, key=lambda o: o["ordered_on"] or "", reverse=True)}
+
+    # --- cash on delivery and delivery problems (before /orders/{order_id}) -------
+
+    def _who(o: dict) -> dict:
+        c = customers.get(o["customer_id"], {})
+        return {"mobile": o["phone"], "customer_name": o.get("customer_name") or c.get("name"),
+                "language": c.get("language", "en-IN")}
+
+    @app.get(
+        "/orders/cod-pending", operation_id="listCodPendingOrders", tags=["Cash on delivery"],
+        summary="Cash-on-delivery orders waiting for the customer to confirm, for a COD confirmation campaign",
+    )
+    def cod_pending() -> dict:
+        rows = [{**_who(o), "order_id": o["order_id"], "total": o.get("amount"), "items": o["items"],
+                 "payment_mode": o.get("payment_mode", "Prepaid"), "created_at": o["ordered_on"],
+                 "delivery_address": o.get("delivery_address")}
+                for o in orders.values() if o["status"] == "Pending confirmation"]
+        return {"count": len(rows), "orders": sorted(rows, key=lambda r: r["created_at"] or "")}
+
+    @app.get(
+        "/orders/ndr", operation_id="listFailedDeliveries", tags=["Delivery problems"],
+        summary="Failed deliveries (NDR) with the courier's reason and attempts, for a reattempt campaign",
+    )
+    def ndr() -> dict:
+        rows = [{**_who(o), "order_id": o["order_id"], "items": o["items"], "total": o.get("amount"),
+                 "payment_mode": o.get("payment_mode", "Prepaid"), "courier_name": o.get("courier"),
+                 "awb_code": o.get("awb"), "ndr_reason": o.get("ndr_reason") or "Delivery attempt failed",
+                 "attempt_count": o.get("attempt_count", 1), "last_attempt_on": o.get("last_attempt_on"),
+                 "delivery_address": o.get("delivery_address")}
+                for o in orders.values() if o["status"] == "Delivery failed"]
+        return {"count": len(rows), "shipments": rows}
 
     @app.get("/orders/{order_id}", operation_id="getOrder", summary="One order")
     def get_order(order_id: str) -> dict:
@@ -184,18 +236,106 @@ def store_app(
         _save()
         return {"message": f"The delivery address for {o['order_id']} is changed.", "order": o}
 
+    @app.post(
+        "/orders/{order_id}/confirm", operation_id="confirmCodOrder", tags=["Cash on delivery"],
+        summary="Confirm a cash-on-delivery order so it is packed and shipped",
+    )
+    def confirm_order(order_id: str) -> dict:
+        o = _get(order_id)
+        if o["status"] != "Pending confirmation":
+            raise HTTPException(409, f"Order {o['order_id']} is {o['status']}; only orders pending confirmation can be confirmed.")
+        o.update(status="Order placed", confirmed_at=now_iso())
+        _save()
+        return {"message": f"Order {o['order_id']} is confirmed. Keep ₹{o.get('amount') or 0:,.0f} ready at delivery.",
+                "order": o}
+
+    @app.get(
+        "/orders/{order_id}/tracking", operation_id="getShipmentTracking", tags=["Delivery problems"],
+        summary="Where a shipment is: status, courier, AWB, last scan, expected delivery date, tracking link",
+    )
+    def tracking(order_id: str) -> dict:
+        o = _get(order_id)
+        st = o["status"]
+        shipment_status = {
+            "Pending confirmation": "Awaiting confirmation", "Order placed": "Not yet shipped", "Packed": "Ready to ship",
+            "Shipped": "In transit", "Delayed": "Delayed in transit", "Out for delivery": "Out for delivery",
+            "Delivered": "Delivered", "Delivery failed": "Undelivered", "Reattempt scheduled": "Reattempt scheduled",
+            "Cancelled": "Cancelled", "Return requested": "Return pickup scheduled",
+        }.get(st, st)
+        shipped = st not in NOT_SHIPPED
+        hub = f"{o.get('courier') or 'Courier'} hub, pincode {o.get('pincode') or ''}".strip()
+        last_scan = None
+        if shipped:
+            when = o.get("delivered_on") or o.get("last_attempt_on") or o.get("expected_on") or o["ordered_on"]
+            activity = {"Delivered": "Delivered", "Out for delivery": "Out for delivery",
+                        "Delivery failed": o.get("ndr_reason") or "Delivery attempt failed",
+                        "Delayed": o.get("status_detail") or "Held at hub"}.get(st, "Arrived at hub")
+            last_scan = {"location": hub, "activity": activity, "scanned_at": f"{when}T09:30:00+05:30" if when else None}
+        return {
+            "order_id": o["order_id"],
+            "shipment_status": shipment_status,
+            "courier_name": o.get("courier") if shipped else None,
+            "awb_code": o.get("awb") if shipped else None,
+            "current_location": last_scan["location"] if last_scan else None,
+            "last_scan": last_scan,
+            "edd": o.get("reattempt_on") or o.get("expected_on"),
+            "delivered_on": o.get("delivered_on"),
+            "tracking_url": o.get("tracking_url") if shipped else None,
+        }
+
+    @app.post(
+        "/orders/{order_id}/delivery", operation_id="rescheduleDelivery", tags=["Delivery problems"],
+        summary="After a failed delivery: book a reattempt, with a corrected address or date if given",
+    )
+    def reattempt(order_id: str, body: Reattempt) -> dict:
+        o = _get(order_id)
+        if o["status"] not in ("Delivery failed", "Reattempt scheduled"):
+            raise HTTPException(409, f"Order {o['order_id']} is {o['status']}; a reattempt is only for a failed delivery.")
+        when = body.reattempt_date or day(1)
+        if when < day(0):
+            raise HTTPException(422, "reattempt_date must be today or later, as YYYY-MM-DD.")
+        if body.address:
+            o["delivery_address"] = body.address.strip()
+        if body.landmark:
+            o["delivery_address"] = f"{o['delivery_address']} (near {body.landmark.strip()})"
+        o.update(status="Reattempt scheduled", reattempt_on=when, expected_on=when)
+        _save()
+        return {"message": f"Delivery of {o['order_id']} will be tried again on {when}.", "order": o}
+
+    @app.get(
+        "/orders/{order_id}/refund", operation_id="getRefundStatus", tags=["Refunds"],
+        summary="Refund status for a cancelled or returned order: amount, status, reference and expected date",
+    )
+    def refund(order_id: str) -> dict:
+        o = _get(order_id)
+        base = {"order_id": o["order_id"], "payment_mode": o.get("payment_mode", "Prepaid"), "refund_amount": 0,
+                "refund_status": "Not applicable", "refund_ref": None, "initiated_on": None, "expected_by": None}
+        if o.get("refund"):
+            return {**base, **o["refund"]}
+        if o["status"] not in ("Cancelled", "Return requested", "Returned"):
+            return {**base, "message": f"Order {o['order_id']} is {o['status']}; there is no refund."}
+        if o.get("payment_mode") == "COD" and not o.get("delivered_on"):
+            return {**base, "message": "Cash on delivery, not delivered: nothing was paid, so nothing is refunded."}
+        started = (o.get("cancelled_at") or "")[:10] or o.get("return_pickup_on") or day(0)
+        status = "Initiated" if o["status"] == "Cancelled" else "Awaiting pickup"
+        return {**base, "refund_amount": o.get("amount") or 0, "refund_status": status,
+                "refund_ref": f"RF{o['order_id'].replace('-', '')}", "initiated_on": started,
+                "expected_by": started if status != "Initiated" else day(5), "refund_mode": "Original payment method"}
+
     # --- test data: change the store's orders from Swagger ------------------------
 
     def _apply(o: dict, edit: OrderEdit) -> None:
         given = edit.model_dump(exclude_unset=True)
-        if "phone" in given or "customer_name" in given:
-            cid = _customer(given.get("phone") or o["phone"], given.get("customer_name"), given.get("pincode"))
+        if "phone" in given or "customer_name" in given or "language" in given:
+            cid = _customer(given.get("phone") or o["phone"], given.get("customer_name"), given.get("pincode"),
+                            given.get("language"))
             c = customers[cid]
             o.update(customer_id=cid, phone=c["phone"])
             if "customer_name" in o or "customer_name" in given:
                 o["customer_name"] = c["name"]
         for key in ("pincode", "items", "status", "status_detail", "ordered_on", "expected_on",
-                    "delivered_on", "courier", "awb", "tracking_url", "delivery_address"):
+                    "delivered_on", "courier", "awb", "tracking_url", "delivery_address",
+                    "payment_mode", "amount", "ndr_reason", "attempt_count"):
             if key in given:
                 o[key] = given[key]
 
@@ -217,9 +357,9 @@ def store_app(
         oid = body.order_id.strip().upper()
         if oid in orders:
             raise HTTPException(409, f"Order {oid} exists; change it with PATCH instead.")
-        cid = _customer(body.phone, body.customer_name, body.pincode)
+        cid = _customer(body.phone, body.customer_name, body.pincode, body.language)
         c = customers[cid]
-        o = {"order_id": oid, "customer_id": cid, "customer_name": c["name"], "phone": c["phone"],
+        o = {"payment_mode": "Prepaid", "order_id": oid, "customer_id": cid, "customer_name": c["name"], "phone": c["phone"],
              "pincode": body.pincode or c["pincode"], "items": body.items, "status": body.status,
              "status_detail": "", "ordered_on": day(0), "expected_on": None, "delivered_on": None,
              "courier": "", "awb": "", "tracking_url": "", "delivery_address": f"Pincode {body.pincode or c['pincode']}"}
@@ -248,9 +388,10 @@ def store_app(
 
 # ---- Kettle & Co ---------------------------------------------------------------
 
-KETTLE_CUSTOMERS = {f"KC-C{100 + i}": {**p, "customer_id": f"KC-C{100 + i}"} for i, p in enumerate(PEOPLE)}
+KETTLE_CUSTOMERS = {f"KC-C{100 + i}": {**p, "customer_id": f"KC-C{100 + i}"} for i, p in enumerate(ALL_PEOPLE)}
 
 #: (customer, item, status, ordered days ago, expected in days or None, delivered days ago or None)
+#: The first eight are prepaid; the rest are in _COD_AND_NDR below.
 _ORDERS = [
     ("KC-C100", "Blue electric kettle", "Shipped", -3, 1, None),
     ("KC-C100", "Steel water bottle (1 L)", "Delivered", -12, None, -6),
@@ -260,7 +401,24 @@ _ORDERS = [
     ("KC-C102", "LED desk lamp", "Order placed", 0, 6, None),
     ("KC-C102", "Cotton bedsheet set", "Out for delivery", -4, 0, None),
     ("KC-C103", "Air fryer 4 L", "Delivered", -8, None, -2),
+    ("KC-C101", "Induction cooktop", "Pending confirmation", 0, 5, None),
+    ("KC-C102", "Copper water jug", "Pending confirmation", -1, 4, None),
+    ("KC-C104", "Steel lunch box set", "Pending confirmation", 0, 5, None),
+    ("KC-C105", "Wet grinder 2 L", "Delivery failed", -6, -1, None),
+    ("KC-C103", "Ceramic dinner set", "Delivery failed", -7, -2, None),
+    ("KC-C106", "Bluetooth speaker", "Cancelled", -10, None, None),
 ]
+#: order → (payment mode, amount, extra fields). Orders not listed are prepaid.
+_COD_AND_NDR = {
+    "KC-240109": ("COD", 2499, {}),
+    "KC-240110": ("COD", 899, {}),
+    "KC-240111": ("COD", 649, {}),
+    "KC-240112": ("COD", 3299, {"ndr_reason": "Customer not reachable", "attempt_count": 1, "last_attempt_on": -1}),
+    "KC-240113": ("Prepaid", 1899, {"ndr_reason": "Address incomplete", "attempt_count": 2, "last_attempt_on": -2}),
+    "KC-240114": ("Prepaid", 1499, {"cancelled_at": -9, "refund": {
+        "refund_amount": 1499, "refund_status": "Processed", "refund_ref": "RFKC240114", "initiated_on": -9,
+        "expected_by": -4, "processed_on": -5, "refund_mode": "UPI"}}),
+}
 
 
 def _order(n: int, row) -> dict:
@@ -281,13 +439,30 @@ def _order(n: int, row) -> dict:
         "tracking_url": f"https://track.example.com/AWB{770100 + n}",
         "delivery_address": c["address"],
         "amount": [1299, 449, 3499, 2799, 899, 1599, 1999, 5499][n % 8],
+        "payment_mode": "Prepaid",
     }
+
+
+def _cod_and_ndr(o: dict) -> dict:
+    mode, amount, extra = _COD_AND_NDR.get(o["order_id"], ("Prepaid", o["amount"], {}))
+    o.update(payment_mode=mode, amount=amount)
+    for key, value in extra.items():
+        if key == "refund":
+            value = {k: day(v) if k in ("initiated_on", "expected_by", "processed_on") else v for k, v in value.items()}
+        elif key == "last_attempt_on":
+            value = day(value)
+        elif key == "cancelled_at":
+            value = day(value) + "T10:00:00+05:30"
+        o[key] = value
+    if o["status"] == "Pending confirmation":
+        o["courier"], o["awb"], o["tracking_url"] = "", "", ""
+    return o
 
 
 def _kettle() -> tuple[dict[str, dict], dict[str, dict]]:
     return (
         copy.deepcopy(KETTLE_CUSTOMERS),
-        {o["order_id"]: o for o in (_order(n, r) for n, r in enumerate(_ORDERS, start=1))},
+        {o["order_id"]: o for o in (_cod_and_ndr(_order(n, r)) for n, r in enumerate(_ORDERS, start=1))},
     )
 
 
