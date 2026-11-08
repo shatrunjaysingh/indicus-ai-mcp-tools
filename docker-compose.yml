@@ -26,8 +26,13 @@ services:
       # else.
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8304}
       SAMPLE_STATE_DIR: /app/state
+      # Where a payment / re-KYC link handed out over MCP points (there is no
+      # request to take the host from), e.g. https://demo.indicus-ai.com. Over
+      # REST the link uses the host the API was called at.
+      SAMPLE_PUBLIC_URL: ${SAMPLE_PUBLIC_URL:-}
       DEMO_HOST: ${DEMO_HOST:-mcp-tools}
-      # The sample client back offices' API key (/shop, /miso, /power, /service): a
+      # The sample client back offices' API key (/shop, /miso, /power, /service,
+      # /lender, /insurer, /clinic, /crm): a
       # test value the chat bot's data connectors send as X-Api-Key, exactly
       # as they would a real client's key.
       SAMPLE_CLIENT_API_KEY: ${SAMPLE_CLIENT_API_KEY:-sample-client-key}

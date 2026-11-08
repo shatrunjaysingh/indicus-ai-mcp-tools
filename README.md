@@ -115,7 +115,7 @@ Only the utility demo needs them, and only to run a visit end to end; seeding
 works without.
 
 
-## Sample client back offices: /shop, /miso, /power, /service
+## Sample client back offices: /shop, /miso, /power, /service, /lender, /insurer, /clinic, /crm
 
 Three pretend businesses for the chat bot's **data connectors**: an online store
 (Kettle & Co), an electricity utility (Brightline Power), and an appliance and
@@ -130,14 +130,39 @@ and no customer data is ever uploaded to IndicusAI.
 | `/power` | accounts by mobile, bills, payment link, outage at the account's address, complaints | raise a complaint |
 | `/service` | products with warranty, warranty by serial, service requests | book a visit, move a visit |
 
+`/shop` (and `/miso`) also cover cash on delivery and delivery problems: `GET /orders/cod-pending`,
+`POST /orders/{id}/confirm`, `GET /orders/{id}/tracking`, `GET /orders/ndr`, `POST /orders/{id}/delivery`
+(reattempt), `GET /orders/{id}/refund`. `/power` has `GET /bills/due` for bill reminders.
+
+**Agent catalog businesses** — what IndicusAI's catalog agents run against, through its standard actions:
+
+| Business | What it offers |
+|---|---|
+| `/lender` Sahyog Finance | loans by mobile, dues list (by dpd), payment links with a payable page, payment status, promises to pay, disputes, KYC status and re-KYC list, video-KYC slots and booking |
+| `/insurer` Suraksha Insurance | policies by mobile, renewals due, renewal quote with a payment link, call disposition |
+| `/clinic` CarePoint Clinics | services, free slots, book / reschedule / cancel, a patient's appointments, upcoming appointments for reminders |
+| `/crm` LeadDesk CRM | leads (new list, create, update, callbacks), tickets (unassigned list, create, update), feedback and the survey list |
+
+Every route, field name and seeded record, for writing mapping presets:
+[docs/SAMPLE-CATALOG-SYSTEMS.md](docs/SAMPLE-CATALOG-SYSTEMS.md).
+
 - **Auth:** `X-Api-Key: sample-client-key` (set `SAMPLE_CLIENT_API_KEY`). It is declared
   as an API-key security scheme, so an OpenAPI import treats it as a stored credential.
-- **Specs:** `/shop/openapi.json`, `/miso/openapi.json`, `/power/openapi.json`, `/service/openapi.json`.
-- **Test people** (the same in all three): `+919000000999` Asha Rao (Bengaluru),
-  `+919000000111` Ravi Sen (Kolkata, which has a power cut today), `+919000000222` Meera Iyer
-  (Chennai), `+919000000333` Arjun Mehta (Mumbai).
-- **Data** is synthetic, in memory, and dated relative to today. `/power` and `/service`
-  changes last until a restart.
+- **Specs:** `/<name>/openapi.json` for each, e.g. `/shop/openapi.json`, `/lender/openapi.json`.
+- **MCP:** every route is also a tool named `<name>_<operationId>`, e.g. `lender_listDueAccounts`.
+- **Test people** (shared): `+919000000999` Asha Rao (Bengaluru, en-IN),
+  `+919000000111` Ravi Sen (Kolkata, which has a power cut today, en-IN), `+919000000222` Meera Iyer
+  (Chennai, ta-IN), `+919000000333` Arjun Mehta (Mumbai, hi-IN); and in the newer seeds
+  `+919000000444` Sunita Sharma (hi-IN), `+919000000555` Karthik Subramanian (ta-IN),
+  `+919000000666` Pooja Verma (hi-IN).
+- **Data** is synthetic and dated relative to today. `/power` and `/service` changes last until
+  a restart.
+- **Changing the catalog businesses' data** (`/lender`, `/insurer`, `/clinic`, `/crm`): under
+  **Test data** on each Swagger page, add a record on your own mobile, change any record,
+  `POST /reset`. Saved in `state/<name>.json` like the stores'.
+- **Links a customer opens** (`/lender/pay/<id>`, `/insurer/pay/<id>`, re-KYC, video-KYC join)
+  need no key and are https on the host the API was called at; over MCP, `SAMPLE_PUBLIC_URL`
+  (or `PUBLIC_BASE_URL`). Locally, open the same path over http.
 - **Changing the stores' data for a test** (`/shop`, `/miso`): on the Swagger page
   (`/miso/docs`, `/shop/docs`), **Authorize** with the key, then under **Test data**:
   `PATCH /orders/{order_id}` changes any field you give — a new `phone` / `customer_name`

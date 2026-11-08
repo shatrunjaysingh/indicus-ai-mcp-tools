@@ -42,6 +42,10 @@ from services import (
     discom_api,
     iam_api,
     payer_api,
+    sample_clinic_api,
+    sample_crm_api,
+    sample_insurer_api,
+    sample_lender_api,
     sample_power_api,
     sample_service_api,
     sample_shop_api,
@@ -64,6 +68,12 @@ SERVICES: dict[str, FastAPI] = {
     "power": sample_power_api.app,
     "service": sample_service_api.app,
     "miso": sample_shop_api.miso_app,
+    # The agent catalog's sample businesses (docs/SAMPLE-CATALOG-SYSTEMS.md):
+    # a lender, an insurer, a clinic chain and a CRM, with editable test data.
+    "lender": sample_lender_api.app,
+    "insurer": sample_insurer_api.app,
+    "clinic": sample_clinic_api.app,
+    "crm": sample_crm_api.app,
 }
 
 mcp: MCPServer = MCPServer(
@@ -74,9 +84,11 @@ mcp: MCPServer = MCPServer(
         "visits, accounts, billing, meter readings and grid events. Payer and "
         "IAM tools cover claims and access certification. Battery tools cover a "
         "battery maker's warranty claims, field readings, factory retests and "
-        "production records. Shop, power and service tools are sample client "
-        "back offices (an online store, an electricity utility, a service "
-        "company) for the chat bot's data connectors."
+        "production records. Shop, miso, power and service tools are sample "
+        "client back offices (online stores, an electricity utility, a service "
+        "company) for the chat bot's data connectors; lender, insurer, clinic "
+        "and crm tools are sample businesses (loans and KYC, policy renewals, "
+        "appointments, leads/tickets/feedback) for the agent catalog."
     ),
 )
 
