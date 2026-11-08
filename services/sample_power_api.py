@@ -180,6 +180,22 @@ def account_outage(consumer_number: str) -> dict:
     }
 
 
+@app.get("/outages/consumers", operation_id="listOutageConsumers", summary="Consumers in areas with a power cut or planned shutdown")
+def outage_consumers() -> dict:
+    """Everyone whose area has a current or planned outage: who to tell."""
+    out = []
+    for a in ACCOUNTS.values():
+        o = OUTAGES.get(a["area"])
+        if not o:
+            continue
+        out.append({
+            "consumer_number": a["consumer_number"], "consumer_name": a["name"], "mobile": a["phone"],
+            "language": a.get("language", "en-IN"), "area": a["area"], "status": o["status"],
+            "cause": o["cause"], "started_at": o["started_at"], "expected_restore": o["expected_restore"],
+        })
+    return {"count": len(out), "consumers": out}
+
+
 class ComplaintIn(BaseModel):
     consumer_number: str
     category: str = Field(description=f"One of: {', '.join(CATEGORIES)}")

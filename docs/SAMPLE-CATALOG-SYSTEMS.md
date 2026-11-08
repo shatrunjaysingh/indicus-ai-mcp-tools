@@ -324,4 +324,16 @@ Seeded unpaid bills, all due in 5 days: BP1004417 Asha ₹2,390 (en-IN), BP30011
 BP5002210 Sunita ₹1,785 (hi-IN), BP6003390 Karthik ₹2,190 (ta-IN). `payment_link` is
 `https://pay.example.com/brightline/<consumer_number>` (not a live page).
 
+| GET | `/power/outages/consumers` | `power_listOutageConsumers` | — | `{count, consumers: [{consumer_number, consumer_name, mobile, language, area, status, cause, started_at, expected_restore}]}` → **`consumers`**: everyone in an area with a power cut (Kolkata, today) or planned shutdown (Chennai, tomorrow) |
+
 **Your own mobile:** `PATCH /power/accounts/BP5002210 {"phone": "<yours>"}`.
+
+---
+
+## 7. `/service` — FixRight Service (technician visits)
+
+Existing routes unchanged (`/products?phone=`, `/warranty/{serial}`, `/requests?phone=`, `/requests/{id}`, `POST /requests`, `POST /requests/{id}/reschedule`).
+
+| Method | Path | MCP tool | Params / body | Response (records at) |
+|---|---|---|---|---|
+| GET | `/service/visits` | `service_listScheduledVisits` | query `within_days` (default 1 = today and tomorrow; 0–7) | `{count, visits: [{request_id, mobile, customer_name, preferred_language, product, visit_on, visit_window, technician}]}` → **`visits`**, open requests with a visit in the window |
