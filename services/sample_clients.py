@@ -131,10 +131,19 @@ def require_key(x_api_key: str | None = Security(API_KEY)) -> None:
 
 
 def valid_mobile(raw: str | None) -> str:
-    """clean_phone, refusing anything that is not a 10-digit Indian mobile."""
+    """clean_phone, refusing anything that is not a whole mobile number.
+
+    An Indian mobile (10 digits, +91 optional) or any other country's number
+    written with its + and country code (+18572227021) — a tester abroad needs
+    an order on their own number. A bare 10-digit number is read as Indian.
+    """
     phone = clean_phone(raw)
-    if len(phone) != 13 or not phone.startswith("+91"):
-        raise HTTPException(422, "Give a 10-digit Indian mobile, e.g. +918826889512.")
+    indian = len(phone) == 13 and phone.startswith("+91")
+    other = (raw or "").strip().startswith("+") and not phone.startswith("+91") and 9 <= len(phone) <= 16
+    if not (indian or other):
+        raise HTTPException(
+            422, "Give a 10-digit Indian mobile (+918826889512), or another country's with + and its code (+18572227021)."
+        )
     return phone
 
 
