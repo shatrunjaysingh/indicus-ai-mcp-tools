@@ -90,7 +90,8 @@ let busy = false;
 function add(kind, text) {
   const d = document.createElement("div");
   d.className = "msg " + kind;
-  d.textContent = text;
+  // The bot marks a few words **bold**; escaped first, so nothing else is HTML.
+  d.innerHTML = esc(text).replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
   $("msgs").appendChild(d);
   $("msgs").scrollTop = $("msgs").scrollHeight;
 }
@@ -101,6 +102,15 @@ function addRich(message) {
     const d = document.createElement("div");
     d.className = "card";
     const line = (label, v) => v ? `<div>${label}: ${esc(v)}</div>` : "";
+    if (c.type === "record") {
+      // A record from a data connector — an order, bill, booking or ticket —
+      // drawn from the lines the connector chose, whatever the business.
+      d.innerHTML = `<b>${esc(c.title || c.kind || "")}</b><div class="st">${esc(c.status || "")}</div>` +
+        (c.lines || []).map(l => line(esc(l.label), l.value)).join("") +
+        (/^https:\/\//.test(c.link || "") ? `<a href="${esc(c.link)}" target="_blank" rel="noopener">${esc(c.link_label || "Open")}</a>` : "");
+      $("msgs").appendChild(d);
+      continue;
+    }
     d.innerHTML = `<b>Order ${esc(c.order)}</b><div class="st">${esc(c.status || "")}</div>` +
       line("Expected", c.expected) + line("Delivered", c.delivered_on) + line("Items", c.items) +
       line("Latest", c.latest_update) + line("Courier", [c.courier, c.awb].filter(Boolean).join(" · ")) +
