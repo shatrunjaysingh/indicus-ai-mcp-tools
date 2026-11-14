@@ -38,7 +38,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from sample_clients import ALL_PEOPLE, clean_phone, day, now_iso, require_key
+from sample_clients import ALL_PEOPLE, clean_phone, day, now_iso, require_key, valid_mobile
 from sample_shop_carts import attach as attach_carts
 
 logger = logging.getLogger(__name__)
@@ -134,9 +134,7 @@ def store_app(
 
     def _customer(phone: str, name: str | None, pincode: str | None, language: str | None = None) -> str:
         """The customer with this mobile, made if new; their name updated if given."""
-        phone = clean_phone(phone)
-        if len(phone) != 13:
-            raise HTTPException(422, "Give a 10-digit Indian mobile, e.g. +918826889512.")
+        phone = valid_mobile(phone)
         cid = by_phone.get(phone)
         if cid is None:
             cid = f"{id_prefix}{phone[-6:]}"
