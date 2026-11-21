@@ -48,6 +48,30 @@ services:
       - ./state:/app/state
     networks: [platform]
 
+  # The Demo Store (examples/connect_sample_app): the sample client app for the
+  # Connect API, at a public address so a prospect can open it on their phone.
+  # The platform's Caddy serves it as demo.<SITE_ADDRESS> and reaches it by
+  # name on the shared network; nothing is published. Its keys — a Connect
+  # integration's key and customer secret from Customer help → Apps & API —
+  # live in .env next to this file.
+  #
+  #   docker compose up -d --build demo-store
+  demo-store:
+    build:
+      context: .
+      dockerfile: examples/connect_sample_app/Dockerfile
+    container_name: demo-store
+    restart: unless-stopped
+    environment:
+      CONNECT_KEY: ${CONNECT_KEY:?set CONNECT_KEY — the Demo Store integration's key}
+      CUSTOMER_SECRET: ${CUSTOMER_SECRET:?set CUSTOMER_SECRET — the integration's customer secret}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      # "Name:+91…,Name:+91…" — mobiles that are on the workspace's orders.
+      DEMO_CUSTOMERS: ${DEMO_CUSTOMERS:-Test customer:+919000000999}
+      # Through the public address, as a real client's server would call it.
+      INDICUS_API: ${INDICUS_API:-https://indicus-ai.com/api/v1}
+    networks: [platform]
+
 networks:
   platform:
     name: ${PLATFORM_NETWORK:-indicusai_default}

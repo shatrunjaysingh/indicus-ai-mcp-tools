@@ -64,3 +64,24 @@ signature checked out.
 
 It never stores the key in the page: everything secret stays in `app.py`'s
 process, which is the point a client's developers should copy.
+
+## A public address for phone demos
+
+On the production box the store runs as the `demo-store` service of this
+repo's `docker-compose.yml`, and the platform's Caddy serves it at
+`demo.<your domain>` (deploy/caddy/Caddyfile in the platform repo). Put the
+keys in `.env` next to `docker-compose.yml`:
+
+```
+CONNECT_KEY=ick_…
+CUSTOMER_SECRET=ics_…
+WEBHOOK_SECRET=whs_…          # optional
+DEMO_CUSTOMERS=Asha:+91…,Ravi:+91…
+```
+
+then `docker compose up -d --build demo-store`. Add a DNS A record for
+`demo` pointing at the box; Caddy obtains the certificate itself.
+
+Laptop only: `HOST=0.0.0.0 python examples/connect_sample_app/app.py` opens it
+to the local network, so a phone on the same Wi-Fi can open
+`http://<laptop address>:8090/`.
