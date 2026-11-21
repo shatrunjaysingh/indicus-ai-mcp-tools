@@ -63,6 +63,13 @@ services:
     container_name: demo-store
     restart: unless-stopped
     command: ["python", "/store/app.py"]
+    # The image's own health check asks :8304; this service answers on :8090.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8090/api/webhooks')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
     volumes:
       - ./examples/connect_sample_app:/store:ro
     environment:
