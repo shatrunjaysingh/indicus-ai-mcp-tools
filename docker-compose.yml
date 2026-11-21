@@ -55,14 +55,19 @@ services:
   # integration's key and customer secret from Customer help → Apps & API —
   # live in .env next to this file.
   #
-  #   docker compose up -d --build demo-store
+  #   docker compose up -d demo-store      (after `docker compose build mcp-tools` once)
   demo-store:
-    build:
-      context: .
-      dockerfile: examples/connect_sample_app/Dockerfile
+    # The demo tools' own image (FastAPI, uvicorn, httpx are in it) with the
+    # store's two files mounted: nothing to download, nothing new to build.
+    image: indicus-ai-mcp-tools-mcp-tools
     container_name: demo-store
     restart: unless-stopped
+    command: ["python", "/store/app.py"]
+    volumes:
+      - ./examples/connect_sample_app:/store:ro
     environment:
+      HOST: 0.0.0.0
+      PORT: "8090"
       CONNECT_KEY: ${CONNECT_KEY:?set CONNECT_KEY — the Demo Store integration's key}
       CUSTOMER_SECRET: ${CUSTOMER_SECRET:?set CUSTOMER_SECRET — the integration's customer secret}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}

@@ -79,7 +79,7 @@ WEBHOOK_SECRET=whs_…          # optional
 DEMO_CUSTOMERS=Asha:+91…,Ravi:+91…
 ```
 
-then `docker compose up -d --build demo-store`. Add a DNS A record for
+then `docker compose up -d demo-store` (it runs on the demo tools' image). Add a DNS A record for
 `demo` pointing at the box; Caddy obtains the certificate itself.
 
 Laptop only: `HOST=0.0.0.0 python examples/connect_sample_app/app.py` opens it
