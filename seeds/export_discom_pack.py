@@ -74,6 +74,20 @@ LISTING: dict[str, tuple[str, str]] = {
 }
 
 
+def impact(name: str) -> str | None:
+    """The governance impact the platform should record for a tool, or None to
+    let it judge from the name.
+
+    The platform's governance reads "export…" in a name as a data export and
+    holds every call for a person's approval. These ten write the list the
+    agent was asked for to a CSV in the demo tools' own export folder and
+    return its link; that is the agent doing its job, and an approval on every
+    one stopped the Theft agent from ever producing its file. Recorded as a
+    write, which governance lets through and still logs.
+    """
+    return "write" if name.startswith("export") else None
+
+
 def main(out: Path) -> None:
     base = discom.DISCOM_API
     tools = []
@@ -88,6 +102,7 @@ def main(out: Path) -> None:
             "path": url[len(base):],
             "param_locations": t["param_locations"],
             "input_schema": t["input_schema"],
+            **({"impact": impact(t["name"])} if impact(t["name"]) else {}),
         })
 
     agents = []
