@@ -178,4 +178,6 @@ def _sse(event: str, data: dict) -> str:
 if __name__ == "__main__":
     if not CONNECT_KEY or not CUSTOMER_SECRET:
         raise SystemExit("Set CONNECT_KEY and CUSTOMER_SECRET (from Customer help → Apps & API). See README.md.")
-    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", "8090")))
+    # HOST=0.0.0.0 to open it to the local network (a phone on the same Wi-Fi
+    # for a demo); the keys stay on this server either way.
+    uvicorn.run(app, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8090")))
