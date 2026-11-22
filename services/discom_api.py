@@ -1839,6 +1839,70 @@ def restoration_export(min_risk: int = 70, include_blocked: bool = False) -> dic
 # arrived as a lookup for a complaint called 'queue'.----------------------------------------------------
 # Use case 6. Eight thousand a month, with statutory clocks running on each.
 
+@app.get("/outcomes", operation_id="getOutcomes",
+         summary="What the DISCOM achieved in a period, each against its baseline")
+def get_outcomes(start: str | None = None, end: str | None = None) -> dict:
+    """Business outcomes for the platform's scorecard, from the DISCOM's records.
+
+    The contract any DISCOM's own API can meet: a list of measures, each with
+    its value for the period, the baseline it is judged against, which way is
+    better, and whether it is money the work brought in (`counts_toward_return`),
+    which the scorecard sets against what the agents cost.
+
+    In this demo the figures come from the campaign and inspection records
+    above, spread over the days asked for; a DISCOM's API reports its own.
+    """
+    from datetime import date, timedelta
+
+    try:
+        d1 = date.fromisoformat(end) if end else date.today()
+        d0 = date.fromisoformat(start) if start else d1 - timedelta(days=29)
+    except ValueError as exc:
+        raise HTTPException(422, "Dates as YYYY-MM-DD.") from exc
+    if d1 < d0:
+        raise HTTPException(422, "The end is before the start.")
+    days = (d1 - d0).days + 1
+
+    targeted = next(c for c in portfolio.CAMPAIGNS if c["campaign"] == "CAM-2026-07")
+    by_balance = next(c for c in portfolio.CAMPAIGNS if c["campaign"] == "CAM-2026-03")
+    pilot = next(h for h in theft.INSPECTION_HISTORY if h["method"] == "score-led pilot")
+    random_ = [h for h in theft.INSPECTION_HISTORY if h["method"] == "random"]
+    random_hit = sum(h["theft_or_unauthorised_found"] for h in random_) / sum(h["inspections"] for h in random_)
+    sla = complaints.TOTALS["by_sla"]
+    within = sla["WITHIN"] / max(1, sum(sla.values()))
+
+    recovered = round(targeted["recovered"] * days / 30, 2)
+    inspections = round(pilot["inspections"] * days / 91)
+    found = round(inspections * pilot["hit_rate"])
+    assessed = round(pilot["assessed_value"] * days / 91, 2)
+    return {
+        "source": "DISCOM demo records (campaign history, inspection results, complaint register)",
+        "currency": "INR",
+        "period": {"start": d0.isoformat(), "end": d1.isoformat(), "days": days},
+        "measures": [
+            {"key": "arrears_recovered", "area": "Collections", "label": "Arrears recovered after AI-targeted calls",
+             "unit": "inr", "value": recovered, "baseline": None, "better": "up", "counts_toward_return": True,
+             "note": "Calls to the accounts the payment-probability score picked (recent deterioration)."},
+            {"key": "return_per_rupee", "area": "Collections", "label": "Recovered per ₹1 of campaign cost",
+             "unit": "x", "value": targeted["recovered_per_rupee_cost"], "baseline": by_balance["recovered_per_rupee_cost"],
+             "baseline_label": "field visits targeted by balance", "better": "up"},
+            {"key": "theft_hit_rate", "area": "Theft", "label": "Inspections that found theft or unauthorised use",
+             "unit": "pct", "value": round(100 * pilot["hit_rate"], 1), "baseline": round(100 * random_hit, 1),
+             "baseline_label": "random, route-based inspections", "better": "up"},
+            {"key": "theft_cases", "area": "Theft", "label": "Theft cases found",
+             "unit": "count", "value": found, "baseline": round(inspections * random_hit),
+             "baseline_label": "the same number of random inspections", "better": "up"},
+            {"key": "assessed_value", "area": "Theft", "label": "Value assessed on theft cases",
+             "unit": "inr", "value": assessed, "baseline": None, "better": "up", "counts_toward_return": True,
+             "note": "Assessed under Section 135; collected over the following months."},
+            {"key": "complaints_within_sla", "area": "Complaints", "label": "Complaints resolved within SLA",
+             "unit": "pct", "value": round(100 * within, 1), "baseline": 61.0,
+             "baseline_label": "before triage by the agent", "better": "up",
+             "note": "A breach is a compensation liability under the Standards of Performance."},
+        ],
+    }
+
+
 @app.get("/complaint-queue", operation_id="getComplaintQueue",
          summary="The month's complaints: categories, priorities, SLA and escalation")
 def complaint_queue() -> dict:
