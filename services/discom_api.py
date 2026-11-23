@@ -1877,6 +1877,9 @@ def get_outcomes(start: str | None = None, end: str | None = None) -> dict:
     assessed = round(pilot["assessed_value"] * days / 91, 2)
     return {
         "source": "DISCOM demo records (campaign history, inspection results, complaint register)",
+        # Made-up figures for demonstrations: the platform labels them as
+        # sample and never adds them into a return.
+        "sample": True,
         "currency": "INR",
         "period": {"start": d0.isoformat(), "end": d1.isoformat(), "days": days},
         "measures": [
@@ -1896,9 +1899,8 @@ def get_outcomes(start: str | None = None, end: str | None = None) -> dict:
              "unit": "inr", "value": assessed, "baseline": None, "better": "up", "counts_toward_return": True,
              "note": "Assessed under Section 135; collected over the following months."},
             {"key": "complaints_within_sla", "area": "Complaints", "label": "Complaints resolved within SLA",
-             "unit": "pct", "value": round(100 * within, 1), "baseline": 61.0,
-             "baseline_label": "before triage by the agent", "better": "up",
-             "note": "A breach is a compensation liability under the Standards of Performance."},
+             "unit": "pct", "value": round(100 * within, 1), "baseline": None, "better": "up",
+             "note": "No earlier figure in these records to compare with. A breach is a compensation liability under the Standards of Performance."},
         ],
     }
 
